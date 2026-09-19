@@ -41,7 +41,7 @@ export async function executeTool<T = unknown>(
       actionId: tool,
       errorClass: "authentication",
       message:
-        "Missing FASTN_API_KEY or FASTN_PROJECT_ID / FASTN_SPACE_ID (MCP)",
+        "Missing FASTN_MCP_TOKEN (or FASTN_API_KEY) or FASTN_PROJECT_ID / FASTN_SPACE_ID (MCP)",
     };
   }
 

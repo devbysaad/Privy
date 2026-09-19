@@ -8,6 +8,7 @@ export async function GET() {
   return NextResponse.json({
     product:
       "Privy investigates who has access across GitHub, Drive, and Slack — then you approve fixes.",
+    dataMode: status.dataMode,
     mcp: {
       url: status.mcpUrl,
       transport: "streamable-http",
@@ -16,7 +17,7 @@ export async function GET() {
       ? { ready: true }
       : { ready: false, missing: live.missing },
     integrations: {
-      fastn: status.fastn ? "connected" : "not configured",
+      fastn: status.fastn ? "credentials set" : "not configured",
       llm: status.gemini
         ? "gemini"
         : status.anthropic
@@ -28,6 +29,8 @@ export async function GET() {
     },
     nextStep: live.ok
       ? "Open /dashboard and click Scan live tools (via Fastn MCP)."
-      : "Add FASTN_API_KEY + FASTN_PROJECT_ID (or FASTN_SPACE_ID) to .env — see WHAT_I_NEED.md",
+      : status.dataMode === "fixture"
+        ? "Sample/fixture mode (default). Demo works offline — see STAGE_RUNBOOK.md"
+        : "Add FASTN_API_KEY + FASTN_PROJECT_ID (or FASTN_SPACE_ID) to .env — see WHAT_I_NEED.md",
   });
 }

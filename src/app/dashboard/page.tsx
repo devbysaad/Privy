@@ -1,16 +1,15 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
-import { ProductGuide } from "@/components/product-guide";
 import { ScanActions } from "@/components/scan-actions";
-import { SeverityBadge } from "@/components/severity-badge";
+import { SourceBadge } from "@/components/source-badge";
 import {
-  formatWhen,
-  platformLabel,
-  ruleLabel,
-  statusLabel,
-} from "@/lib/labels";
+  buildCompanyEvents,
+  buildFixtureSnapshot,
+  listAttentionItems,
+} from "@/lib/fixtures/company-story";
+import { formatClock } from "@/lib/labels";
 import { getLatestScan, getScan, runScan } from "@/lib/scan/orchestrator";
-import type { FindingEvidence, Graph, PlatformCoverage } from "@/types";
+import type { Graph } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -30,197 +29,141 @@ export default async function DashboardPage({
     scan = await getScan(seeded.scanId);
   }
 
-  const rank = { critical: 0, high: 1, medium: 2 } as const;
-  const findings = [...(scan?.findings ?? [])].sort(
-    (a, b) =>
-      rank[a.severity] - rank[b.severity] || a.title.localeCompare(b.title),
-  );
+  const findings = scan?.findings ?? [];
+  const critical = findings.filter((f) => f.severity === "critical").length;
   const graph = (scan?.graph ?? null) as Graph | null;
-  const coverage = (scan?.platformCoverage ?? null) as
-    | PlatformCoverage[]
-    | null;
-  const unresolved = graph?.identities.filter((i) => i.unresolved) ?? [];
+  const peopleFromScan = graph?.identities.length ?? null;
+  const snapshot = buildFixtureSnapshot(critical);
+  if (peopleFromScan != null) snapshot.people = peopleFromScan;
 
-  const counts = {
-    critical: findings.filter((f) => f.severity === "critical").length,
-    high: findings.filter((f) => f.severity === "high").length,
-    medium: findings.filter((f) => f.severity === "medium").length,
-  };
-
-  const highlight =
-    findings.find((f) => f.ruleId === "cross-platform-mismatch") ??
-    findings.find((f) => f.ruleId === "orphaned-identity") ??
-    findings[0];
+  const events = buildCompanyEvents().slice(0, 6);
+  const attention = listAttentionItems(critical);
+  const q = demo ? "?demo=1" : "";
 
   return (
     <AppShell demo={demo || Boolean(scan?.isDemo)}>
-      <ProductGuide demo={demo || Boolean(scan?.isDemo)} />
-
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            What needs a look
+          <p className="text-sm text-muted-foreground">Good morning.</p>
+          <h1 className="font-heading mt-1 text-2xl font-semibold tracking-tight text-ink">
+            Here’s what’s happening across your company
           </h1>
-          <p className="mt-1 max-w-lg text-sm text-muted-foreground">
-            {demo || scan?.isDemo
-              ? "Sample org below — click a finding to see the full investigate → approve loop."
-              : "Issues from your last live scan, sorted by urgency."}
+          <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-muted-foreground">
+            Privy connects GitHub, Slack, and Jira with security signals — one
+            place to understand activity and what needs review.
           </p>
         </div>
         <ScanActions demo={demo} />
       </div>
 
-      {!scan ? (
-        <div className="rounded-2xl border border-dashed border-border bg-background/70 px-6 py-12 text-center">
-          <p className="text-base font-medium">No scan yet</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Load sample data to walk through a realistic org story — no
-            connectors required.
+      <section className="mb-6 rounded-2xl border border-border bg-white p-5">
+        <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          Company snapshot
+        </h2>
+        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Snap label="People" value={snapshot.people} />
+          <Snap label="Active PRs" value={snapshot.activePrs} />
+          <Snap label="Open issues" value={snapshot.openIssues} />
+          <Snap label="Critical findings" value={snapshot.criticalFindings} />
+        </div>
+      </section>
+
+      <div className="mb-6 grid gap-6 lg:grid-cols-2">
+        <section className="rounded-2xl border border-border bg-white p-5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              Company activity
+            </h2>
+            <Link
+              href={`/dashboard/activity${q}`}
+              className="text-xs font-medium text-ink underline-offset-2 hover:underline"
+            >
+              Full timeline
+            </Link>
+          </div>
+          <ul className="mt-4 space-y-3">
+            {events.map((e) => (
+              <li key={e.id} className="flex gap-3 border-b border-border/60 pb-3 last:border-0">
+                <div className="w-14 shrink-0 pt-0.5 text-[11px] text-muted-foreground">
+                  {formatClock(e.timestamp)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <SourceBadge source={e.source} />
+                    <p className="text-sm font-medium text-ink">{e.title}</p>
+                  </div>
+                  {e.description ? (
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {e.description}
+                    </p>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-white p-5">
+          <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Needs attention
+          </h2>
+          <ul className="mt-4 space-y-3">
+            {attention.map((a) => (
+              <li key={a.label}>
+                <Link
+                  href={a.href}
+                  className="block rounded-lg border border-border px-3 py-2.5 transition hover:border-slate-300"
+                >
+                  <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    {a.kind}
+                  </p>
+                  <p className="mt-0.5 text-sm font-medium text-ink">{a.label}</p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-4 border-t border-border pt-4">
+            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              Security intelligence
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {findings.length} open finding(s) from deterministic rules.
+            </p>
+            <Link
+              href={`/dashboard/findings${q}`}
+              className="mt-2 inline-block text-sm font-medium text-ink underline-offset-2 hover:underline"
+            >
+              Review findings →
+            </Link>
+          </div>
+        </section>
+      </div>
+
+      <Link
+        href={`/dashboard/assistant${q}`}
+        className="flex items-center justify-between rounded-2xl border border-border bg-ink px-5 py-4 text-white transition hover:bg-ink/90"
+      >
+        <div>
+          <p className="text-xs font-semibold tracking-wide text-white/60 uppercase">
+            AI Command Center
+          </p>
+          <p className="mt-1 font-heading text-lg font-semibold">
+            What’s happening today?
           </p>
         </div>
-      ) : (
-        <>
-          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat
-              label="Overall risk"
-              value={String(scan.riskScore ?? "—")}
-              hint="Heuristic, not a grade"
-            />
-            <Stat label="Critical" value={String(counts.critical)} />
-            <Stat label="High" value={String(counts.high)} />
-            <Stat label="Medium" value={String(counts.medium)} />
-          </div>
-
-          {highlight ? (
-            <Link
-              href={`/findings/${highlight.id}${demo ? "?demo=1" : ""}`}
-              className="mb-6 block rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300 hover:shadow"
-            >
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                Suggested starting point
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <SeverityBadge severity={highlight.severity} />
-                <span className="text-sm text-muted-foreground">
-                  {ruleLabel(highlight.ruleId)}
-                </span>
-              </div>
-              <p className="mt-2 text-base font-medium leading-snug">
-                {highlight.title}
-              </p>
-              <p className="mt-2 text-sm text-slate-600">
-                Tap to review facts → explanation → person across tools
-              </p>
-            </Link>
-          ) : null}
-
-          {coverage?.some((c) => c.status === "failed") ? (
-            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-              <p className="font-medium">Some tools didn’t fully sync</p>
-              <p className="mt-1">
-                {coverage
-                  .map(
-                    (c) =>
-                      `${platformLabel(c.platform)}: ${c.status === "ok" ? "ok" : "needs attention"}`,
-                  )
-                  .join(" · ")}
-                . Findings below may be incomplete.
-              </p>
-            </div>
-          ) : null}
-
-          {unresolved.length > 0 ? (
-            <div className="mb-6 rounded-xl border border-border bg-white px-4 py-4 text-sm">
-              <p className="font-medium">People we couldn’t match by email</p>
-              <p className="mt-1 text-muted-foreground">
-                They stay visible so nothing is silently merged on display name.
-              </p>
-              <ul className="mt-3 flex flex-wrap gap-2">
-                {unresolved.map((i) => (
-                  <li key={i.id}>
-                    <Link
-                      href={`/identities/${encodeURIComponent(i.id)}${demo ? "?demo=1" : ""}${scan ? `&scan=${scan.id}` : ""}`}
-                      className="inline-flex rounded-full border border-border bg-slate-50 px-3 py-1 text-xs font-medium hover:bg-slate-100"
-                    >
-                      {i.displayName}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          <div className="space-y-2">
-            <div className="flex items-end justify-between gap-2 px-1">
-              <h2 className="text-sm font-semibold text-foreground">
-                All findings
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                {findings.length} total
-                {scan.isDemo ? " · sample org" : ""}
-              </p>
-            </div>
-            <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-white">
-              {findings.map((f) => {
-                const ev = (f.evidence ?? {}) as FindingEvidence;
-                const who =
-                  ev.identityName ??
-                  ev.identityEmail ??
-                  (f.identityId === "org" ? "Organization" : f.identityId);
-                return (
-                  <li key={f.id}>
-                    <Link
-                      href={`/findings/${f.id}${demo ? "?demo=1" : ""}`}
-                      className="flex flex-col gap-2 px-4 py-4 transition hover:bg-slate-50 sm:flex-row sm:items-center sm:gap-4"
-                    >
-                      <div className="sm:w-24">
-                        <SeverityBadge severity={f.severity} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium leading-snug">{f.title}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {who}
-                          {" · "}
-                          {ruleLabel(f.ruleId)}
-                        </p>
-                      </div>
-                      <div className="text-xs text-muted-foreground sm:text-right">
-                        {statusLabel(f.status)}
-                      </div>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-
-          {scan.finishedAt ? (
-            <p className="mt-4 text-xs text-muted-foreground">
-              Last updated {formatWhen(scan.finishedAt.toISOString())}
-            </p>
-          ) : null}
-        </>
-      )}
+        <span className="text-xl">→</span>
+      </Link>
     </AppShell>
   );
 }
 
-function Stat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string | null;
-}) {
+function Snap({ label, value }: { label: string; value: number | null }) {
   return (
-    <div className="rounded-2xl border border-border bg-white px-4 py-3">
+    <div>
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">
-        {value}
+      <p className="mt-1 font-heading text-2xl font-semibold tabular-nums text-ink">
+        {value == null ? "N/A" : value}
       </p>
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }

@@ -109,7 +109,7 @@ export function ScanActions({ demo }: { demo?: boolean }) {
           title={
             liveReady
               ? "Scan GitHub / Drive / Slack via Fastn"
-              : "Needs FASTN_API_KEY + FASTN_SPACE_ID in .env"
+              : "Needs PRIVY_DATA_MODE=live + Fastn keys (see STAGE_RUNBOOK)"
           }
           onClick={() => run("live")}
         >
@@ -118,7 +118,7 @@ export function ScanActions({ demo }: { demo?: boolean }) {
       </div>
       {status && !liveReady ? (
         <p className="max-w-xs text-xs text-muted-foreground sm:text-right">
-          Live scan waiting on Fastn keys (
+          Live scan locked (
           {(status.liveScan.missing ?? []).join(", ") || "not ready"}).
         </p>
       ) : null}

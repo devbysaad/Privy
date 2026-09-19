@@ -98,7 +98,8 @@ export async function remediateFinding(opts: {
       ok: true,
       dryRun: true,
       status: "executed",
-      message: `Dry-run: would call ${mapping.tool()} — ${mapping.description}`,
+      message:
+        "Practice run — nothing changed outside Privy. Live Fastn writes stay off until MCP OAuth + action IDs are verified.",
       verified: false,
     };
   }

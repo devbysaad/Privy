@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { liveScanReady } from "@/lib/env";
-import { getOrCreateWorkspace, toPublic } from "@/lib/onboarding";
+import { preferredScanMode } from "@/lib/env";
 import { runScan, getScan } from "@/lib/scan/orchestrator";
-import { db } from "@/lib/db";
 import type { Graph, PlatformCoverage } from "@/types";
 
 /**
- * Run discovery for the operator's workspace.
- * Live when Fastn is configured; otherwise sample graph (labeled).
+ * Run discovery for the signed-in operator.
+ * No Workspace table — uses Clerk userId as orgId.
  */
 export async function POST() {
   const { userId } = await auth();
@@ -16,25 +14,11 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const workspace = await getOrCreateWorkspace(userId);
-  if (workspace.companyDomain?.trim()) {
-    process.env.COMPANY_EMAIL_DOMAIN = workspace.companyDomain.trim();
-  }
-
-  const live = liveScanReady();
-  const mode = live.ok ? "live" : "demo";
+  const mode = preferredScanMode();
+  const orgId = userId;
 
   try {
-    const result = await runScan({ mode, orgId: workspace.id });
-    await db.workspace.update({
-      where: { id: workspace.id },
-      data: {
-        lastScanId: result.scanId,
-        onboardingStep: 6,
-        onboardingComplete: true,
-      },
-    });
-
+    const result = await runScan({ mode, orgId });
     const scan = await getScan(result.scanId);
     const graph = (scan?.graph ?? null) as Graph | null;
     const coverage = (scan?.platformCoverage ?? null) as
@@ -60,12 +44,6 @@ export async function POST() {
         identityId: f.identityId,
         status: f.status,
       })),
-      workspace: toPublic({
-        ...workspace,
-        lastScanId: result.scanId,
-        onboardingStep: 6,
-        onboardingComplete: true,
-      }),
     });
   } catch (err) {
     return NextResponse.json(

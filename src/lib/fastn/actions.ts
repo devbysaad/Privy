@@ -1,22 +1,26 @@
 /**
- * Fastn action IDs — verify in the live workspace before demo.
- * Override via env when discovery yields different IDs.
+ * Fastn action IDs — placeholders only until live MCP verification.
+ * Override via env when find_tools yields different IDs.
  *
- * Verification sheet (fixture-only claim = leave unchecked until live Fastn):
- * | Platform | Capability              | Action ID                         | Verified |
+ * Verification (2026-09-19 final pass):
+ * - On-disk FASTN_* empty; sample key against mcp.fastn.dev/shttp → HTTP 401
+ * - find_tools / list_connectors / execute_tool → NOT VERIFIED
+ * - No action IDs confirmed — do not claim live reads or writes
+ *
+ * | Platform | Capability              | Placeholder ID                    | Verified |
  * |----------|-------------------------|-----------------------------------|----------|
- * | GitHub   | list org members        | github.list_org_members           | [ ] live |
- * | GitHub   | list repos              | github.list_repos                 | [ ] live |
- * | GitHub   | list collaborators      | github.list_collaborators         | [ ] live |
- * | GitHub   | remove collaborator     | github.remove_collaborator        | [ ] live |
- * | Drive    | list files              | google_drive.list_files           | [ ] live |
- * | Drive    | list permissions        | google_drive.list_permissions     | [ ] live |
- * | Drive    | remove permission       | google_drive.remove_permission    | [ ] cut  |
- * | Slack    | list users              | slack.list_users                  | [ ] live |
- * | Slack    | list channels           | slack.list_channels               | [ ] live |
- * | Slack    | list channel members    | slack.list_channel_members        | [ ] live |
+ * | GitHub   | list org members        | github.list_org_members           | NO       |
+ * | GitHub   | list repos              | github.list_repos                 | NO       |
+ * | GitHub   | list collaborators      | github.list_collaborators         | NO       |
+ * | GitHub   | remove collaborator     | github.remove_collaborator        | NO       |
+ * | Drive    | list files              | google_drive.list_files           | NO       |
+ * | Drive    | list permissions        | google_drive.list_permissions     | NO       |
+ * | Drive    | remove permission       | google_drive.remove_permission    | CUT      |
+ * | Slack    | list users              | slack.list_users                  | NO       |
+ * | Slack    | list channels           | slack.list_channels               | NO       |
+ * | Slack    | list channel members    | slack.list_channel_members        | NO       |
  *
- * Stage claim A (default): demo fixture only — see STAGE_RUNBOOK.md
+ * Stage claim A (locked): fixture only — PRIVY_DATA_MODE=fixture — STAGE_RUNBOOK.md
  */
 
 export const FASTN_ACTIONS = {

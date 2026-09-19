@@ -6,13 +6,13 @@ export default function SignInPage() {
   return (
     <AuthShell
       title="Sign in"
-      subtitle="Access Privy investigations for your workspace."
+      subtitle="Google, GitHub, or email — then investigate your workspace."
       footer={
         <>
           No account?{" "}
           <Link
             href="/sign-up"
-            className="font-medium text-slate-900 underline-offset-4 hover:underline"
+            className="font-medium text-ink underline-offset-4 hover:underline"
           >
             Create one
           </Link>

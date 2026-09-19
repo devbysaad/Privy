@@ -2,41 +2,42 @@
 
 **Demo claim (locked):** **A — Fixture-only / sample org**  
 Say on stage: *“This is labeled sample data — safe to explore offline.”*  
-Do **not** claim live Fastn unless you re-verify actions and set `FASTN_*`.
+Do **not** claim live Fastn.
 
-**Entry URL:** `/` → **Explore the sample org** → `/dashboard?demo=1`
+**Root cause (known):** `mcp.fastn.dev/shttp` expects an **OAuth access token** from `connect.fastn.dev` (PKCE). An `fsk_*` API key as Bearer returns 401 even with no auth at all — wrong credential class.
+
+**Data mode:** `PRIVY_DATA_MODE=fixture`. Live needs OAuth token + verified action IDs + `PRIVY_DATA_MODE=live`.
+
+**Entry URL (stage):** `/` → **Explore the sample org** → `/dashboard?demo=1`  
+Then: **Activity** → **Assistant** (“What’s happening today?”) → **Findings** → approve dry-run.  
+Do **not** demo through `/onboarding` on stage.
+
+**Pitch line:** *“Every external call goes through one Fastn MCP wrapper — `executeTool`. The hosted gateway wants OAuth consent per workspace; we didn’t finish provisioning, so you’re seeing the seeded org through the same rules engine.”*
 
 ---
 
 ## Fastn verification
-;ol
-| Status | Result |
-|--------|--------|
-| `FASTN_API_KEY` / `FASTN_SPACE_ID` in `.env` | **Missing** → live scan skipped |
-| Action ID sheet in `src/lib/fastn/actions.ts` | **Unverified** — treat as placeholder |
-| Live write | **Cut** — approval UI + dry-run only |
 
-To upgrade to claim B later: fill Fastn keys, verify each action in the workspace, then rehearse live once.
+| Check | Result |
+|--------|--------|
+| `PRIVY_DATA_MODE` | **fixture** (locked for stage) |
+| MCP with API key | **401** — gateway wants OAuth, not `fsk_*` |
+| Action IDs in `actions.ts` | **Placeholders** — never from `find_tools` |
+| Live write | **Cut** — dry-run only |
 
 ---
 
 ## Env on stage machine
 
-Required for claim A: nothing beyond local SQLite (already in use).
-
-Ensure `.env` includes:
-
 ```
+PRIVY_DATA_MODE=fixture
 REMEDIATION_DRY_RUN=true
+GEMINI_MODEL=gemini-3.6-flash
 ```
 
-Optional later:
+Optional: `GEMINI_API_KEY` for real explanations (templates work without it).
 
-- `ANTHROPIC_API_KEY` — nicer explanations (templates work without it)
-- `FASTN_API_KEY` + `FASTN_SPACE_ID` — live scan only
-- `DEMO_GITHUB_OWNER` + `DEMO_GITHUB_REPO` — real write only; then flip dry-run off **once** on stage
-
-Never show `.env` values on screen.
+Never show `.env` on screen.
 
 ---
 
@@ -47,9 +48,7 @@ Never show `.env` values on screen.
 3. Open **Suggested starting point** (cross-platform / orphaned)
 4. **Step 1** facts → **Step 2** counterpoint → **See their access across tools**
 5. Back to finding → **Review & approve removal** → Cancel once, then Approve (dry-run)
-6. Confirm success copy: practice run / nothing changed outside Privy
-
-**Wi‑Fi fail:** click **Scan live tools** (or disable network) → expect fallback to sample/cached demo. Or skip live and stay on `?demo=1`.
+6. Confirm: practice run / nothing changed outside Privy
 
 **Scripts:**
 
@@ -62,22 +61,34 @@ npm run dev
 
 ---
 
+## Post-demo: OAuth recovery ladder (only path to live)
+
+Stop if MCP still 401s with no Authorization header (proves keys are irrelevant).
+
+1. Register / authorize at `https://connect.fastn.dev` (PKCE S256, scope `mcp`)
+2. Exchange code → access token; set as Bearer (e.g. `FASTN_MCP_TOKEN`) in `mcp.ts`
+3. `initialize` + `tools/list` / `find_tools` → write **real** action IDs into env / `actions.ts`
+4. Connect GitHub in Fastn; one scripted `execute_tool` read
+5. Only then: `PRIVY_DATA_MODE=live`, rehearse live click path **twice**
+
+Hard stop: no green live scan rehearsed twice within ~20 min of the slot → stay fixture.
+
+---
+
 ## 3-minute pitch card
 
 | Time | Say / do |
 |------|----------|
 | 0:00–0:20 | *“People change jobs. Permissions don’t.”* One person, three tools. |
 | 0:20–0:40 | Anchor: *“Who has access to what, and does that access still make sense?”* |
-| 0:40–1:00 | Reveal Privy: investigate across tools, explain with a counterpoint, **you** approve fixes. Fastn connects/executes — we own the graph and rules. |
+| 0:40–1:00 | Privy: investigate across tools, counterpoint, **you** approve. Fastn is the egress wrapper. |
 | 1:00–1:20 | Open sample org (label it). Point at suggested finding. |
-| 1:20–1:50 | Evidence first (person, tools, role). Then “why this may be fine.” |
-| 1:50–2:20 | Identity across GitHub / Drive / Slack — the wow join. |
-| 2:20–2:45 | Approve modal → dry-run approve. Human gate stays. |
-| 2:45–3:00 | Close: rules detect, AI explains, humans approve. Offline-safe demo. |
+| 1:20–1:50 | Evidence first. Then “why this may be fine.” |
+| 1:50–2:20 | Identity across GitHub / Drive / Slack. |
+| 2:20–2:45 | Approve modal → dry-run. Human gate stays. |
+| 2:45–3:00 | Close: rules detect, AI explains, humans approve. Offline-safe. |
 
-**If short on time:** cut architecture; keep finding + counterpoint + approve.
-
-**Fallback line:** *“Live connectors aren’t on this machine — you’re seeing the seeded org, same rules engine we’d run on live Fastn data.”*
+**Fallback line:** *“Live connectors aren’t provisioned on this machine — seeded org, same rules engine we’d run on live Fastn data.”*
 
 Full playbook: [info/07_PRESENTATION.md](../info/07_PRESENTATION.md)
 
@@ -86,13 +97,10 @@ Full playbook: [info/07_PRESENTATION.md](../info/07_PRESENTATION.md)
 ## Done when
 
 - [x] Claim A locked  
-- [x] Fastn skipped honestly  
+- [x] Fastn OAuth blocker documented honestly  
+- [x] `PRIVY_DATA_MODE=fixture`  
 - [x] Dry-run on  
-- [x] `npm run check:rules` green  
-- [x] `npm run rehearse` green ×2  
-- [x] HTTP click-path ×2 (home → demo dash → finding → identity → dry-run approve)  
-- [x] Live scan without Fastn fails cleanly; cached demo still loads  
-- [ ] You personally click the path once on the stage laptop (visual QA)  
+- [x] Gemini model unblocked for explanations  
+- [x] `npm run check:rules` / `npm run rehearse`  
+- [ ] You personally click the path once on the stage laptop  
 - [ ] You time the pitch card once aloud (~3 min)  
-
-Pitch card is in this file above. Full playbook: [info/07_PRESENTATION.md](../info/07_PRESENTATION.md)

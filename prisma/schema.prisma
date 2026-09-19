@@ -83,6 +83,24 @@ model Finding {
   @@index([ruleId])
 }
 
+model Task {
+  id                 String   @id @default(cuid())
+  orgId              String   @default("default")
+  title              String
+  description        String?
+  status             String   @default("open") // open | done | cancelled
+  priority           String   @default("medium") // high | medium | low
+  relatedFindingId   String?
+  relatedIdentityId  String?
+  relatedEventId     String?
+  relatedResourceId  String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([status])
+}
+
 /** Operator workspace from onboarding — one per Clerk user. */
 model Workspace {
   id                  String   @id @default(cuid())

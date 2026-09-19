@@ -7,8 +7,6 @@ export function SignUpForm() {
     <ClerkAuthPanel
       initialMode="signup"
       redirectComplete="/onboarding"
-      heading="Create your account"
-      subtitle="Google, GitHub, phone, or email."
     />
   );
 }

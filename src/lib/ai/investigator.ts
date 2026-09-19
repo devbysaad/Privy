@@ -53,38 +53,55 @@ export async function explainFinding(input: {
 }
 
 async function explainWithGemini(user: string): Promise<ExplainResult | null> {
-  try {
-    const key = process.env.GEMINI_API_KEY!.trim();
-    const model =
-      process.env.GEMINI_MODEL?.trim() || "gemini-2.0-flash";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM }] },
-        contents: [{ role: "user", parts: [{ text: user }] }],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 600,
-          responseMimeType: "application/json",
-        },
-      }),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      candidates?: Array<{
-        content?: { parts?: Array<{ text?: string }> };
-      }>;
-    };
-    const text =
-      data.candidates?.[0]?.content?.parts
-        ?.map((p) => p.text ?? "")
-        .join("\n") ?? "";
-    return parseExplainJson(text);
-  } catch {
-    return null;
+  const key = process.env.GEMINI_API_KEY!.trim();
+  const primary =
+    process.env.GEMINI_MODEL?.trim() || "gemini-3.6-flash";
+  // Prefer configured model; fall back if overloaded / unavailable.
+  const models = [primary, "gemini-flash-latest", "gemini-3.5-flash"].filter(
+    (m, i, arr) => arr.indexOf(m) === i,
+  );
+
+  for (const model of models) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: SYSTEM }] },
+            contents: [{ role: "user", parts: [{ text: user }] }],
+            generationConfig: {
+              temperature: 0.2,
+              // Thinking models burn tokens on thoughts; 600 truncates JSON mid-string.
+              maxOutputTokens: 2048,
+              responseMimeType: "application/json",
+            },
+          }),
+        });
+        if (res.status === 429 || res.status === 503) {
+          await new Promise((r) => setTimeout(r, attempt * 700));
+          continue;
+        }
+        if (!res.ok) break; // try next model
+        const data = (await res.json()) as {
+          candidates?: Array<{
+            content?: { parts?: Array<{ text?: string }> };
+          }>;
+        };
+        const text =
+          data.candidates?.[0]?.content?.parts
+            ?.map((p) => p.text ?? "")
+            .join("\n") ?? "";
+        const parsed = parseExplainJson(text);
+        if (parsed) return parsed;
+        break;
+      } catch {
+        await new Promise((r) => setTimeout(r, attempt * 400));
+      }
+    }
   }
+  return null;
 }
 
 async function explainWithAnthropic(

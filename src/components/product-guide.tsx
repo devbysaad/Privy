@@ -46,9 +46,15 @@ export function ProductGuide({ demo }: { demo?: boolean }) {
         <p className="font-medium text-foreground">Live tools status</p>
         <ul className="mt-2 space-y-1 text-muted-foreground">
           <li>
+            Data mode:{" "}
+            <span className="font-medium text-foreground">
+              {status.dataMode === "live" ? "live" : "fixture (sample)"}
+            </span>
+          </li>
+          <li>
             Fastn MCP:{" "}
             <span className="font-medium text-foreground">
-              {status.fastn ? "ready" : "not configured"}
+              {status.fastn ? "credentials set" : "not configured"}
             </span>
             {!status.fastn
               ? " — add FASTN_API_KEY + FASTN_PROJECT_ID to .env"
@@ -57,7 +63,11 @@ export function ProductGuide({ demo }: { demo?: boolean }) {
           <li>
             Explanations:{" "}
             <span className="font-medium text-foreground">
-              {status.anthropic ? "Anthropic connected" : "built-in templates"}
+              {status.llm
+                ? status.gemini
+                  ? "Gemini"
+                  : "Anthropic"
+                : "built-in templates"}
             </span>
           </li>
           <li>
@@ -70,15 +80,15 @@ export function ProductGuide({ demo }: { demo?: boolean }) {
         {!live.ok ? (
           <p className="mt-3 text-xs text-amber-900">
             {demo
-              ? "You’re on sample data so the story works without connectors. For a real company scan, add Fastn keys (see WHAT_I_NEED.md), restart the app, then Scan live tools."
-              : "Live scan needs Fastn keys. See WHAT_I_NEED.md in the project root, or keep exploring with sample data."}{" "}
+              ? "You’re on sample data — offline-safe. Live Fastn needs PRIVY_DATA_MODE=live plus verified MCP keys (STAGE_RUNBOOK.md)."
+              : "Live scan is locked until PRIVY_DATA_MODE=live and Fastn MCP auth is verified. Keep exploring with sample data."}{" "}
             <Link href="/api/status" className="underline underline-offset-2">
               /api/status
             </Link>
           </p>
         ) : (
           <p className="mt-3 text-xs text-emerald-800">
-            Fastn is configured — use <strong>Scan live tools</strong> for your
+            Live mode unlocked — use <strong>Scan live tools</strong> for your
             real workspace.
           </p>
         )}

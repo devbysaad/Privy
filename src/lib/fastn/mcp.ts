@@ -2,8 +2,10 @@
  * Fastn MCP Streamable HTTP transport.
  * Sole network client for https://mcp.fastn.dev (override via FASTN_MCP_URL).
  *
- * Protocol: JSON-RPC over POST /shttp with Bearer API key.
- * App tools: find_tools, execute_tool (API-key auth allows these two).
+ * Auth note (hackathon 2026-09-19): mcp.fastn.dev/shttp is OAuth-protected
+ * (connect.fastn.dev, PKCE). An fsk_* API key as Bearer returns 401.
+ * When OAuth works, prefer FASTN_MCP_TOKEN (access token) over FASTN_API_KEY.
+ * App tools: find_tools, execute_tool.
  */
 
 export type McpErrorClass =
@@ -46,7 +48,8 @@ function mcpBaseUrl(): string {
 
 export function mcpConfigured(): boolean {
   return Boolean(
-    process.env.FASTN_API_KEY?.trim() &&
+    (process.env.FASTN_MCP_TOKEN?.trim() ||
+      process.env.FASTN_API_KEY?.trim()) &&
       (process.env.FASTN_PROJECT_ID?.trim() ||
         process.env.FASTN_SPACE_ID?.trim()),
   );
@@ -74,11 +77,15 @@ function sleep(ms: number) {
 }
 
 function authHeaders(): HeadersInit {
-  const key = process.env.FASTN_API_KEY!.trim();
+  // Prefer OAuth access token when present; API key alone 401s on mcp.fastn.dev.
+  const token =
+    process.env.FASTN_MCP_TOKEN?.trim() ||
+    process.env.FASTN_API_KEY?.trim() ||
+    "";
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json, text/event-stream",
-    Authorization: `Bearer ${key}`,
+    Authorization: `Bearer ${token}`,
   };
   const project = mcpProjectId();
   if (project) headers["x-project-id"] = project;
@@ -238,7 +245,7 @@ export async function callMcpTool<T = unknown>(
       tool: name,
       errorClass: "authentication",
       message:
-        "Missing FASTN_API_KEY or FASTN_PROJECT_ID / FASTN_SPACE_ID for MCP",
+        "Missing FASTN_MCP_TOKEN (or FASTN_API_KEY) or FASTN_PROJECT_ID / FASTN_SPACE_ID for MCP",
     };
   }
 

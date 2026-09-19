@@ -7,8 +7,6 @@ export function SignInForm() {
     <ClerkAuthPanel
       initialMode="signin"
       redirectComplete="/onboarding"
-      heading="Welcome back"
-      subtitle="Google, GitHub, phone, or email."
     />
   );
 }

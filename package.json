@@ -12,9 +12,11 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "check:rules": "npx --yes tsx src/lib/rules/check.ts",
+    "check:connectors": "npx --yes tsx scripts/check-connectors.ts",
     "seed:demo": "npx --yes tsx scripts/seed-demo.ts",
     "rehearse": "npx --yes tsx scripts/rehearse.ts",
-    "check": "tsx src/lib/rules/check.ts"
+    "check:intelligence": "npx --yes tsx src/lib/intelligence/check.ts",
+    "check": "tsx src/lib/rules/check.ts && tsx scripts/check-connectors.ts && tsx src/lib/intelligence/check.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",
@@ -22,6 +24,8 @@
     "@clerk/nextjs": "^7.9.4",
     "@hookform/resolvers": "^5.9.1",
     "@prisma/client": "^6.19.3",
+    "@react-three/drei": "^10.7.8",
+    "@react-three/fiber": "^9.7.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
@@ -32,8 +36,10 @@
     "react-dom": "19.2.8",
     "react-hook-form": "^7.88.0",
     "recharts": "^3.10.1",
+    "server-only": "^0.0.1",
     "shadcn": "^4.21.0",
     "tailwind-merge": "^3.7.0",
+    "three": "^0.186.0",
     "tsx": "^4.23.13",
     "zod": "^4.6.5"
   },
@@ -42,6 +48,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.186.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
     "prisma": "^6.19.3",

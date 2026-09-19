@@ -12,7 +12,7 @@ NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
 NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 ```
 
-In the Clerk dashboard: enable **Email + password**, **Google** OAuth, and email verification codes for sign-up.
+In the Clerk dashboard: enable **Email + password**, **Google**, and **GitHub**. Leave **Phone** off (UI hides it either way).
 
 ## Database (Supabase)
 
@@ -26,51 +26,65 @@ In the Clerk dashboard: enable **Email + password**, **Google** OAuth, and email
 | Variable | Why |
 |----------|-----|
 | `GEMINI_API_KEY` | Finding explanations (preferred) |
+| `GEMINI_MODEL=gemini-3.6-flash` | Required — `gemini-2.0-flash` is retired |
 | `ANTHROPIC_API_KEY` | Fallback if Gemini unset |
 
 Without either, the app uses template explanations.
 
 ---
 
+## In-app Fastn embed (Connections / onboarding)
+
+Connect opens Fastn **inside Privy** (iframe sheet), not a new tab.
+
+| Variable | Why |
+|----------|-----|
+| `FASTN_API_KEY` | Mint short-lived `emb_` tokens (server only) |
+| `FASTN_END_ORG_ID` | Customer UUID from Fastn → Customers (required for embed) |
+
+If embed mint fails, Privy falls back to **same-tab** navigation to Fastn and returns you to `/connections?fastn=return`.
+
+---
+
 # What I need from you (Fastn MCP live scans)
 
+**Current stage lock:** `PRIVY_DATA_MODE=fixture` — demo is offline-safe.
 
-Privy talks to SaaS tools **only** through Fastn MCP:
+**Important:** `https://mcp.fastn.dev/shttp` is an **OAuth-protected** MCP resource. An `fsk_*` API key as `Authorization: Bearer` returns **401**. Live needs a user-consented access token from `https://connect.fastn.dev` (PKCE), not (only) the platform API key.
 
-`https://mcp.fastn.dev/shttp`  
-(wrapper: `src/lib/fastn/mcp.ts` → `executeTool` in `client.ts`)
+Privy SaaS egress still goes through one wrapper:
 
-## Required in `.env`
+`src/lib/fastn/mcp.ts` → `executeTool` in `client.ts`
 
-| Variable | Why |
-|----------|-----|
-| `FASTN_API_KEY` | Bearer token for MCP (`Authorization: Bearer …`) |
-| `FASTN_PROJECT_ID` | Fastn workspace / project id (MCP `project_id`). `FASTN_SPACE_ID` also accepted as alias. |
-
-Optional:
+## For explanations (stage)
 
 | Variable | Why |
 |----------|-----|
-| `FASTN_MCP_URL` | Override MCP endpoint (default `https://mcp.fastn.dev/shttp`) |
-| `ANTHROPIC_API_KEY` | Better explanations (templates work without it) |
-| `DEMO_GITHUB_OWNER` / `DEMO_GITHUB_REPO` | Throwaway repo for a real remove-collaborator |
-| `COMPANY_EMAIL_DOMAIN` | Your company domain for “external” detection |
-| `REMEDIATION_DRY_RUN=true` | Keep until the stage write |
+| `GEMINI_API_KEY` | Finding explanations |
+| `GEMINI_MODEL=gemini-3.6-flash` | Default; old flash models 404 |
 
-## In Fastn / MCP gateway
+## Required for live (post-demo)
 
-1. Sign in / claim gateway at [mcp.fastn.dev](https://mcp.fastn.dev)
-2. Connect **GitHub** (+ Drive; Slack optional) for your project
-3. Copy API key + project id into `.env`
-4. Restart `npm run dev` → `/dashboard` → **Scan live tools**
+| Variable | Why |
+|----------|-----|
+| `PRIVY_DATA_MODE=live` | Unlocks live scan / discover |
+| `FASTN_MCP_TOKEN` | OAuth access token from Connect (after `mcp.ts` supports it) |
+| Project / space id | Still useful for tool scoping once auth works |
 
-Action IDs used by collectors live in `src/lib/fastn/actions.ts`. If `find_tools` returns different IDs, set the `FASTN_GITHUB_*` / `FASTN_DRIVE_*` / `FASTN_SLACK_*` overrides.
+`FASTN_API_KEY` alone is **not** enough for `mcp.fastn.dev/shttp`.
 
-## After keys
+## Recovery order
+
+1. Complete OAuth at [connect.fastn.dev](https://connect.fastn.dev)
+2. Call MCP with that access token → `find_tools`
+3. Write real action IDs into `src/lib/fastn/actions.ts` / `FASTN_GITHUB_*` overrides
+4. Connect GitHub (etc.) in Fastn
+5. Set `PRIVY_DATA_MODE=live` only after a green live scan rehearsed twice
+
+Keep `REMEDIATION_DRY_RUN=true` until a verified throwaway write exists.
 
 ```bash
-# should show liveScan.ready true (no secret values)
 curl -s localhost:3000/api/status
 ```
 
-If live scan fails, paste the **error message only** (never the API key).
+Paste error messages only — never API keys or OAuth tokens.

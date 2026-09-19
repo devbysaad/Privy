@@ -39,10 +39,23 @@ export function UserMenu() {
     "Account";
 
   return (
-    <div className="flex items-center gap-3">
-      <span className="hidden max-w-[180px] truncate text-xs text-muted-foreground sm:inline">
+    <div className="flex items-center gap-2 sm:gap-3">
+      <button
+        type="button"
+        onClick={() => router.push("/settings")}
+        className="hidden max-w-[180px] truncate text-xs text-muted-foreground hover:text-ink sm:inline"
+        title="Open settings"
+      >
         {label}
-      </span>
+      </button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="hidden sm:inline-flex"
+        onClick={() => router.push("/settings")}
+      >
+        Settings
+      </Button>
       <Button
         variant="outline"
         size="sm"

@@ -2,6 +2,8 @@
  * Server env validation — names only in errors, never values.
  */
 
+export type PrivyDataMode = "fixture" | "live";
+
 export function missingEnv(keys: readonly string[]): string[] {
   return keys.filter((k) => !process.env[k]?.trim());
 }
@@ -12,9 +14,19 @@ export function assertDbConfigured(): void {
   }
 }
 
+/** Hackathon lock: fixture unless PRIVY_DATA_MODE=live after Fastn is verified. */
+export function privyDataMode(): PrivyDataMode {
+  const m = process.env.PRIVY_DATA_MODE?.trim().toLowerCase();
+  if (m === "live") return "live";
+  return "fixture";
+}
+
 export function fastnConfigured(): boolean {
   return (
-    Boolean(process.env.FASTN_API_KEY?.trim()) &&
+    Boolean(
+      process.env.FASTN_MCP_TOKEN?.trim() ||
+        process.env.FASTN_API_KEY?.trim(),
+    ) &&
     Boolean(
       process.env.FASTN_PROJECT_ID?.trim() ||
         process.env.FASTN_SPACE_ID?.trim(),
@@ -42,6 +54,7 @@ export function remediationDryRun(): boolean {
 
 export function integrationStatus() {
   return {
+    dataMode: privyDataMode(),
     fastn: fastnConfigured(),
     gemini: geminiConfigured(),
     anthropic: anthropicConfigured(),
@@ -61,6 +74,7 @@ export function liveScanReady():
   | { ok: true }
   | { ok: false; missing: string[] } {
   const missing: string[] = [];
+  if (privyDataMode() !== "live") missing.push("PRIVY_DATA_MODE=live");
   if (!process.env.FASTN_API_KEY?.trim()) missing.push("FASTN_API_KEY");
   if (
     !process.env.FASTN_PROJECT_ID?.trim() &&
@@ -69,4 +83,9 @@ export function liveScanReady():
     missing.push("FASTN_PROJECT_ID");
   }
   return missing.length ? { ok: false, missing } : { ok: true };
+}
+
+/** Onboarding / auto paths — always fixture unless data mode + Fastn ready. */
+export function preferredScanMode(): "demo" | "live" {
+  return liveScanReady().ok ? "live" : "demo";
 }

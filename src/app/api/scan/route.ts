@@ -21,7 +21,7 @@ export async function POST(req: Request) {
         {
           error: "Live scan not configured",
           missing: ready.missing,
-          hint: "Use mode=demo or set required env vars",
+          hint: "Fixture mode is the hackathon default. Set PRIVY_DATA_MODE=live and Fastn keys only after MCP verification — or use mode=demo.",
         },
         { status: 400 },
       );

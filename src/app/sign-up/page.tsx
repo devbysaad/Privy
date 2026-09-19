@@ -6,13 +6,13 @@ export default function SignUpPage() {
   return (
     <AuthShell
       title="Create your account"
-      subtitle="Operators sign in to scan, investigate, and approve access changes."
+      subtitle="Google, GitHub, or email — operators scan, investigate, and approve."
       footer={
         <>
           Already have an account?{" "}
           <Link
             href="/sign-in"
-            className="font-medium text-slate-900 underline-offset-4 hover:underline"
+            className="font-medium text-ink underline-offset-4 hover:underline"
           >
             Sign in
           </Link>

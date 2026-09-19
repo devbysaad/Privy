@@ -39,6 +39,17 @@ export function formatWhen(iso: string | null | undefined): string {
   });
 }
 
+/** Clock time for activity timelines. */
+export function formatClock(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function platformLabel(p: string): string {
   if (p === "github") return "GitHub";
   if (p === "drive") return "Google Drive";
