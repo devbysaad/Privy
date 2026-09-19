@@ -1,10 +1,10 @@
 "use client";
 
 import { useAuth, useUser } from "@clerk/nextjs";
-import { useSignIn, useSignUp } from "@clerk/nextjs/legacy";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { ClerkAuthPanel } from "@/components/auth/clerk-auth-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -173,13 +173,7 @@ export function OnboardingWizard() {
           key={step}
           className="privy-fade-up mt-8 rounded-2xl border border-slate-200/80 bg-white/90 p-6 shadow-sm backdrop-blur-sm"
         >
-          {step === 1 ? (
-            <AccountStep
-              onDone={() => setStep(2)}
-              error={error}
-              setError={setError}
-            />
-          ) : null}
+          {step === 1 ? <AccountStep onDone={() => setStep(2)} /> : null}
 
           {step === 2 ? (
             <form
@@ -485,114 +479,13 @@ function ErrorText({ error }: { error: string | null }) {
   );
 }
 
-function AccountStep({
-  onDone,
-  error,
-  setError,
-}: {
-  onDone: () => void;
-  error: string | null;
-  setError: (v: string | null) => void;
-}) {
+function AccountStep({ onDone }: { onDone: () => void }) {
   const { isSignedIn } = useAuth();
-  const { isLoaded: upLoaded, signUp, setActive: setActiveUp } = useSignUp();
-  const { isLoaded: inLoaded, signIn, setActive: setActiveIn } = useSignIn();
-  const [mode, setMode] = useState<"signup" | "signin">("signup");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [code, setCode] = useState("");
-  const [pendingVerify, setPendingVerify] = useState(false);
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (isSignedIn) onDone();
-    // only advance once when session appears
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn]);
-
-  async function google() {
-    setError(null);
-    const loaded = mode === "signup" ? upLoaded : inLoaded;
-    if (!loaded) return;
-    setBusy(true);
-    try {
-      if (mode === "signup" && signUp) {
-        await signUp.authenticateWithRedirect({
-          strategy: "oauth_google",
-          redirectUrl: "/sso-callback",
-          redirectUrlComplete: "/onboarding",
-        });
-        return;
-      }
-      if (signIn) {
-        await signIn.authenticateWithRedirect({
-          strategy: "oauth_google",
-          redirectUrl: "/sso-callback",
-          redirectUrlComplete: "/onboarding",
-        });
-      }
-    } catch (err) {
-      setError(clerkMessage(err) ?? "Google sign-in failed");
-      setBusy(false);
-    }
-  }
-
-  async function onEmailSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      if (mode === "signup") {
-        if (!upLoaded || !signUp) return;
-        await signUp.create({
-          emailAddress: email.trim(),
-          password,
-          firstName: firstName.trim() || undefined,
-        });
-        await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
-        setPendingVerify(true);
-      } else {
-        if (!inLoaded || !signIn || !setActiveIn) return;
-        const result = await signIn.create({
-          identifier: email.trim(),
-          password,
-        });
-        if (result.status === "complete") {
-          await setActiveIn({ session: result.createdSessionId });
-          onDone();
-          return;
-        }
-        setError("Additional verification required in Clerk.");
-      }
-    } catch (err) {
-      setError(clerkMessage(err) ?? "Authentication failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onVerify(e: React.FormEvent) {
-    e.preventDefault();
-    if (!upLoaded || !signUp || !setActiveUp) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await signUp.attemptEmailAddressVerification({
-        code: code.trim(),
-      });
-      if (result.status === "complete") {
-        await setActiveUp({ session: result.createdSessionId });
-        onDone();
-        return;
-      }
-      setError("Verification incomplete.");
-    } catch (err) {
-      setError(clerkMessage(err) ?? "Invalid code");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   if (isSignedIn) {
     return (
@@ -602,93 +495,17 @@ function AccountStep({
     );
   }
 
-  if (pendingVerify) {
-    return (
-      <form onSubmit={onVerify} className="space-y-4">
-        <StepHeading
-          title="Verify your email"
-          subtitle={`Enter the code we sent to ${email}.`}
-        />
-        <Input
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder="123456"
-          className="h-10"
-          required
-        />
-        <ErrorText error={error} />
-        <Button type="submit" className="h-10 w-full" disabled={busy}>
-          {busy ? "Verifying…" : "Verify"}
-        </Button>
-      </form>
-    );
-  }
-
   return (
     <div className="space-y-4">
       <StepHeading
         title="Create your Privy account"
-        subtitle="Sign up with Google or work email. You’ll connect company tools next."
+        subtitle="Google, GitHub, phone, or email — then connect your company tools."
       />
-      <Button
-        type="button"
-        variant="outline"
-        className="h-10 w-full"
-        disabled={busy}
-        onClick={() => void google()}
-      >
-        Continue with Google
-      </Button>
-      <div className="relative py-1 text-center text-xs text-slate-400">
-        <span className="bg-white px-2 relative z-10">or email</span>
-        <span className="absolute inset-x-0 top-1/2 border-t border-slate-100" />
-      </div>
-      <form onSubmit={onEmailSubmit} className="space-y-3">
-        {mode === "signup" ? (
-          <Input
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            placeholder="First name"
-            className="h-10"
-          />
-        ) : null}
-        <Input
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@company.com"
-          className="h-10"
-        />
-        <Input
-          type="password"
-          required
-          minLength={8}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
-          className="h-10"
-        />
-        <ErrorText error={error} />
-        <Button type="submit" className="h-10 w-full" disabled={busy}>
-          {busy
-            ? "Working…"
-            : mode === "signup"
-              ? "Create account"
-              : "Sign in"}
-        </Button>
-      </form>
-      <button
-        type="button"
-        className="w-full text-center text-sm text-slate-600 underline-offset-4 hover:underline"
-        onClick={() =>
-          setMode((m) => (m === "signup" ? "signin" : "signup"))
-        }
-      >
-        {mode === "signup"
-          ? "Already have an account? Sign in"
-          : "Need an account? Sign up"}
-      </button>
+      <ClerkAuthPanel
+        initialMode="signup"
+        redirectComplete="/onboarding"
+        onComplete={onDone}
+      />
     </div>
   );
 }
@@ -896,11 +713,4 @@ function Stat({ label, value }: { label: string; value: number }) {
       </p>
     </div>
   );
-}
-
-function clerkMessage(err: unknown): string | null {
-  if (!err || typeof err !== "object") return null;
-  const e = err as { errors?: Array<{ longMessage?: string; message?: string }> };
-  const first = e.errors?.[0];
-  return first?.longMessage ?? first?.message ?? null;
 }
