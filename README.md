@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Privy
 
-## Getting Started
+> Who has access to what, and does that access still make sense?
 
-First, run the development server:
+**Rules detect. AI explains. Humans approve. Fastn connects and fixes.**
+
+**Stage day:** follow [STAGE_RUNBOOK.md](STAGE_RUNBOOK.md) (fixture-only claim A by default).
+
+Hackathon MVP: scan GitHub + Drive + Slack (via Fastn or a seeded demo fixture), normalize an access graph, run eight deterministic rules, explain findings with a counterpoint, and remediate only after human approval.
+
+## Stack
+
+| Layer | Tech |
+|--------|------|
+| App | Next.js App Router · TypeScript · Tailwind · shadcn/ui |
+| DB | SQLite locally (`prisma/dev.db`) · Prisma (`Scan` + `Finding`) |
+| Integrations | Fastn (`executeTool` only) |
+| AI | Anthropic (optional; template fallback) |
+
+## Quick start (demo, offline)
 
 ```bash
+npm install
+npx prisma db push
+npm run seed:demo
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000/dashboard?demo=1](http://localhost:3000/dashboard?demo=1).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | What |
+|---------|------|
+| `npm run check:rules` | Assert-based rule/fixture check (no network) |
+| `npm run seed:demo` | Persist a demo scan into SQLite |
+| `npm run dev` | Next.js |
 
-## Learn More
+## Env
 
-To learn more about Next.js, take a look at the following resources:
+See `.env.example`. Live scans need `FASTN_API_KEY` + `FASTN_SPACE_ID`. Remediation dry-run is **on by default** (`REMEDIATION_DRY_RUN=true`). Flip only for a throwaway `DEMO_GITHUB_OWNER` / `DEMO_GITHUB_REPO`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Architecture
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+POST /api/scan { mode: demo|live }
+  → collectors (live) or fixture (demo)
+  → resolve identities (email)
+  → pure rules → findings
+  → SQLite Scan + Finding
 
-## Deploy on Vercel
+POST /api/findings/:id { action: explain }  → LLM or template
+POST /api/remediate { findingId, intent }   → allowlist + approval gate
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Agent guidance
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+[Ponytail](https://github.com/DietrichGebert/ponytail) via `.cursor/rules/ponytail.mdc` + `AGENTS.md`.

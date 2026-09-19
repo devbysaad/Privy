@@ -1,0 +1,102 @@
+// Privy MVP: Scan + Finding; graph as JSON on Scan
+// Local SQLite by default. To use Supabase: set provider postgresql,
+// url = env("DATABASE_URL"), directUrl = env("DIRECT_URL"), then prisma db push.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+enum ScanStatus {
+  running
+  complete
+  partial
+  failed
+}
+
+enum Severity {
+  critical
+  high
+  medium
+}
+
+enum FindingStatus {
+  open
+  approved
+  executing
+  executed
+  failed
+  dismissed
+}
+
+model Scan {
+  id               String     @id @default(cuid())
+  orgId            String     @default("default")
+  status           ScanStatus @default(running)
+  platforms        Json       // string[]
+  platformCoverage Json?
+  graph            Json?
+  riskScore        Int?
+  scoreVersion     String     @default("v1")
+  isDemo           Boolean    @default(false)
+  errorMessage     String?
+  startedAt        DateTime   @default(now())
+  finishedAt       DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  findings Finding[]
+}
+
+model Finding {
+  id              String        @id @default(cuid())
+  scanId          String
+  orgId           String        @default("default")
+  ruleId          String
+  severity        Severity
+  identityId      String
+  title           String
+  evidence        Json
+  explanation     String?
+  counterpoint    String?
+  confidence      Float?
+  suggestedAction String?
+  status          FindingStatus @default(open)
+  approverId      String?
+  approvedAt      DateTime?
+  executedAt      DateTime?
+  verifiedAt      DateTime?
+  errorMessage    String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId])
+  @@index([orgId])
+  @@index([severity])
+  @@index([status])
+  @@index([identityId])
+  @@index([ruleId])
+}
+
+/** Operator workspace from onboarding — one per Clerk user. */
+model Workspace {
+  id                  String   @id @default(cuid())
+  clerkUserId         String   @unique
+  operatorName        String   @default("")
+  orgName             String   @default("")
+  field               String   @default("")
+  companyDomain       String?
+  githubConnected     Boolean  @default(false)
+  driveConnected      Boolean  @default(false)
+  slackConnected      Boolean  @default(false)
+  onboardingStep      Int      @default(2)
+  onboardingComplete  Boolean  @default(false)
+  lastScanId          String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
