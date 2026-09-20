@@ -3,9 +3,6 @@
  */
 export const FASTN_PORTAL_URL = "https://connect.fastn.dev";
 
-/** localStorage key for locally-opened connector flags (tour only). */
-export const CONNECTOR_STORAGE_KEY = "privy.connectedConnectors";
-
 export type ConnectorId =
   | "github"
   | "drive"
@@ -377,16 +374,6 @@ export const CONNECT_APPS = CONNECTOR_CATALOG.filter((c) => c.scanReady).map(
     fastnHint: `Connect ${c.name} in your Fastn project.`,
   }),
 );
-
-/** @deprecated Demo stays inside Privy — no navigation to Fastn. */
-export function openFastnPortal() {
-  // no-op: connect happens in-app via ConnectorGrid + FastnConnectDialog
-}
-
-/** @deprecated Kept for call-site compatibility; does not leave Privy. */
-export function goToFastnSameTab(_returnUrl?: string) {
-  // no-op: opening connect.fastn.dev blanked the UX; use in-app connect instead
-}
 
 /** Self-check: catalog size and scan-ready subset. Run via `npm run check:connectors`. */
 export function assertConnectorCatalog() {

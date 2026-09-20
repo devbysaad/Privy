@@ -35,14 +35,14 @@ Without either, the app uses template explanations.
 
 ## In-app Fastn embed (Connections / onboarding)
 
-Connect opens Fastn **inside Privy** (iframe sheet), not a new tab.
+Connect renders the Fastn Integration Hub **inline inside Privy** — no new tab, no overlay. The iframe sends `frame-ancestors *`, so embedding is supported.
 
 | Variable | Why |
 |----------|-----|
-| `FASTN_API_KEY` | Mint short-lived `emb_` tokens (server only) |
-| `FASTN_END_ORG_ID` | Customer UUID from Fastn → Customers (required for embed) |
+| `FASTN_API_KEY` | Mint short-lived `emb_` tokens + read connections (server only) |
+| `FASTN_END_ORG_ID` | Optional. Tenant for the widget; `FASTN_SPACE_ID` is used when unset |
 
-If embed mint fails, Privy falls back to **same-tab** navigation to Fastn and returns you to `/connections?fastn=return`.
+"Connected" is never assumed. `GET /api/fastn/connections` reads `GET /api/v1/connections` from Fastn and only an `ACTIVE` row marks a connector verified. If the mint or the read fails, the UI shows the real error instead of a fake success.
 
 ---
 

@@ -5,11 +5,7 @@ import { useClerk, useUser } from "@clerk/nextjs";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { ConnectorGrid } from "@/components/connector-grid";
-import {
-  CONNECTOR_CATALOG,
-  CONNECTOR_STORAGE_KEY,
-  type ConnectorId,
-} from "@/lib/connectors";
+import { CONNECTOR_CATALOG, type ConnectorId } from "@/lib/connectors";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState, Suspense } from "react";
 import { LogOut } from "lucide-react";
@@ -33,22 +29,8 @@ function SettingsInner() {
   const { isLoaded, isSignedIn, user } = useUser();
   const { signOut } = useClerk();
 
-  const [connected, setConnected] = useState<
-    Partial<Record<ConnectorId, boolean>>
-  >({});
+  const [verified, setVerified] = useState<ConnectorId[]>([]);
   const [status, setStatus] = useState<StatusPayload | null>(null);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(CONNECTOR_STORAGE_KEY);
-      if (raw)
-        setConnected(
-          JSON.parse(raw) as Partial<Record<ConnectorId, boolean>>,
-        );
-    } catch {
-      /* ignore */
-    }
-  }, []);
 
   useEffect(() => {
     fetch("/api/status")
@@ -57,19 +39,11 @@ function SettingsInner() {
       .catch(() => setStatus(null));
   }, []);
 
-  const onConnect = useCallback((id: ConnectorId) => {
-    setConnected((prev) => {
-      const next = { ...prev, [id]: true };
-      try {
-        localStorage.setItem(CONNECTOR_STORAGE_KEY, JSON.stringify(next));
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  }, []);
+  const onConnectorsChange = useCallback(
+    (ids: ConnectorId[]) => setVerified(ids),
+    [],
+  );
 
-  const openedCount = Object.values(connected).filter(Boolean).length;
   const scanReadyCount = CONNECTOR_CATALOG.filter((c) => c.scanReady).length;
   const email =
     user?.primaryEmailAddress?.emailAddress ??
@@ -198,11 +172,11 @@ function SettingsInner() {
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Search and connect any app via Fastn. Live scans use GitHub,
-              Drive, and Slack ({scanReadyCount} scan-ready) · {openedCount}{" "}
-              opened · {CONNECTOR_CATALOG.length} in catalog.
+              Drive, and Slack ({scanReadyCount} scan-ready) · {verified.length}{" "}
+              verified · {CONNECTOR_CATALOG.length} in catalog.
             </p>
           </div>
-          <ConnectorGrid connected={connected} onConnect={onConnect} />
+          <ConnectorGrid onChange={onConnectorsChange} />
         </section>
       </div>
     </AppShell>

@@ -13,10 +13,11 @@
     "db:studio": "prisma studio",
     "check:rules": "npx --yes tsx src/lib/rules/check.ts",
     "check:connectors": "npx --yes tsx scripts/check-connectors.ts",
+    "check:connections": "npx --yes tsx scripts/check-connections.ts",
     "seed:demo": "npx --yes tsx scripts/seed-demo.ts",
     "rehearse": "npx --yes tsx scripts/rehearse.ts",
     "check:intelligence": "npx --yes tsx src/lib/intelligence/check.ts",
-    "check": "tsx src/lib/rules/check.ts && tsx scripts/check-connectors.ts && tsx src/lib/intelligence/check.ts"
+    "check": "tsx src/lib/rules/check.ts && tsx scripts/check-connectors.ts && tsx scripts/check-connections.ts && tsx src/lib/intelligence/check.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",

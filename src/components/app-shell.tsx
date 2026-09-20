@@ -1,17 +1,23 @@
 import Link from "next/link";
 import { UserMenu } from "@/components/auth/user-menu";
+import { ConnectorLogo } from "@/components/connector-logo";
 import { cn } from "@/lib/utils";
+import type { ConnectorId } from "@/lib/connectors";
 
-const NAV = [
+type NavItem =
+  | { label: string; href: string; logo?: undefined }
+  | { label: string; href: string; logo: ConnectorId };
+
+const NAV: NavItem[] = [
   { label: "Overview", href: "/dashboard" },
   { label: "Activity", href: "/dashboard/activity" },
   { label: "Assistant", href: "/dashboard/assistant" },
-  { label: "GitHub", href: "/dashboard/github" },
-  { label: "Jira", href: "/dashboard/jira" },
-  { label: "Slack", href: "/dashboard/slack" },
+  { label: "GitHub", href: "/dashboard/github", logo: "github" },
+  { label: "Jira", href: "/dashboard/jira", logo: "jira" },
+  { label: "Slack", href: "/dashboard/slack", logo: "slack" },
   { label: "Findings", href: "/dashboard/findings" },
   { label: "Tasks", href: "/dashboard/tasks" },
-] as const;
+];
 
 export function AppShell({
   children,
@@ -55,8 +61,17 @@ export function AppShell({
           </div>
           <nav className="flex flex-wrap items-center gap-0.5 text-sm">
             {NAV.map((item) => (
-              <NavLink key={item.href} href={`${item.href}${q}`}>
-                {item.label}
+              <NavLink key={item.href} href={`${item.href}${q}`} title={item.label}>
+                {item.logo ? (
+                  <ConnectorLogo
+                    id={item.logo}
+                    name={item.label}
+                    size="sm"
+                    className="rounded-md"
+                  />
+                ) : (
+                  item.label
+                )}
               </NavLink>
             ))}
           </nav>
@@ -72,15 +87,18 @@ export function AppShell({
 function NavLink({
   href,
   children,
+  title,
 }: {
   href: string;
   children: React.ReactNode;
+  title?: string;
 }) {
   return (
     <Link
       href={href}
+      title={title}
       className={cn(
-        "rounded-md px-2.5 py-1.5 text-muted-foreground transition hover:bg-white/70 hover:text-ink",
+        "inline-flex items-center rounded-md px-2.5 py-1.5 text-muted-foreground transition hover:bg-white/70 hover:text-ink",
       )}
     >
       {children}

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { PlatformLogo } from "@/components/connector-logo";
 import { SeverityBadge } from "@/components/severity-badge";
 import { formatWhen, platformLabel, ruleLabel } from "@/lib/labels";
 import { getScan } from "@/lib/scan/orchestrator";
@@ -92,7 +93,12 @@ export default async function IdentityPage({
                     : "rounded-2xl border border-dashed border-border bg-white px-4 py-3"
                 }
               >
-                <p className="text-sm font-medium">{platformLabel(p)}</p>
+              <div className="flex items-center gap-2.5">
+                <PlatformLogo platform={p} size="md" />
+                <div>
+                  <p className="text-sm font-medium">{platformLabel(p)}</p>
+                </div>
+              </div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {present
                     ? identity.nativeIds[p]
@@ -129,7 +135,10 @@ export default async function IdentityPage({
                 return (
                   <tr key={g.id} className="border-b last:border-0">
                     <td className="px-4 py-3">
-                      {platformLabel(g.platform)}
+                      <span className="inline-flex items-center gap-2">
+                        <PlatformLogo platform={g.platform} size="sm" />
+                        <span className="sr-only">{platformLabel(g.platform)}</span>
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       {resource?.name ?? g.resourceId}

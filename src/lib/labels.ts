@@ -28,7 +28,7 @@ export function statusLabel(status: string): string {
   return STATUS_LABELS[status] ?? status;
 }
 
-export function formatWhen(iso: string | null | undefined): string {
+export function formatWhen(iso: string | Date | null | undefined): string {
   if (!iso) return "Unknown";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "Unknown";

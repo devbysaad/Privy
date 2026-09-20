@@ -35,5 +35,6 @@ export async function GET() {
     token: result.token,
     iframeUrl: result.iframeUrl,
     expiresIn: result.expiresIn,
+    endOrgId: result.endOrgId,
   });
 }

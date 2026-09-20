@@ -1,34 +1,61 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import {
-  CONNECTOR_CATALOG,
-  type ConnectorId,
-} from "@/lib/connectors";
+import { useEffect, useMemo, useState } from "react";
+import { CONNECTOR_CATALOG, type ConnectorId } from "@/lib/connectors";
 import { ConnectorLogo } from "@/components/connector-logo";
-import { FastnConnectDialog } from "@/components/fastn-connect-dialog";
+import { FastnConnectPanel } from "@/components/fastn-connect-panel";
+import {
+  isConnected,
+  useConnections,
+  type ConnectionRow,
+} from "@/lib/use-connections";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Check, Search } from "lucide-react";
 
-type ConnectedMap = Partial<Record<ConnectorId, boolean>>;
+function StatusBadge({ row }: { row: ConnectionRow | undefined }) {
+  if (isConnected(row)) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-teal-soft px-2 py-0.5 text-[10px] font-semibold tracking-wide text-teal uppercase">
+        <Check className="h-3 w-3" /> Verified
+      </span>
+    );
+  }
+  if (row?.status === "pending") {
+    return (
+      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-amber-800 uppercase">
+        Not confirmed
+      </span>
+    );
+  }
+  return null;
+}
 
 export function ConnectorGrid({
-  connected,
-  onConnect,
   filterScanReady,
   compact,
+  onChange,
 }: {
-  connected: ConnectedMap;
-  onConnect: (id: ConnectorId) => void;
   /** When true, only show scan-ready connectors */
   filterScanReady?: boolean;
   compact?: boolean;
+  /** Reports verified connector ids so pages can gate on real state. */
+  onChange?: (connectedIds: ConnectorId[]) => void;
 }) {
+  const { rows, verifying, error, refresh, markPending } = useConnections();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("all");
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [activeId, setActiveId] = useState<ConnectorId | null>(null);
+
+  const verifiedIds = useMemo(
+    () =>
+      CONNECTOR_CATALOG.filter((c) => isConnected(rows[c.id])).map((c) => c.id),
+    [rows],
+  );
+
+  useEffect(() => {
+    onChange?.(verifiedIds);
+  }, [verifiedIds, onChange]);
 
   const categories = useMemo(() => {
     const set = new Set(CONNECTOR_CATALOG.map((c) => c.category));
@@ -51,6 +78,14 @@ export function ConnectorGrid({
 
   return (
     <div className="space-y-4">
+      {activeId ? (
+        <FastnConnectPanel
+          connectorId={activeId}
+          onClose={() => setActiveId(null)}
+          onConnected={() => void refresh(true)}
+        />
+      ) : null}
+
       {!filterScanReady ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
@@ -73,7 +108,7 @@ export function ConnectorGrid({
                   "rounded-full px-3 py-1.5 text-xs font-medium capitalize transition",
                   category === cat
                     ? "bg-ink text-white"
-                    : "bg-white text-muted-foreground hover:text-ink border border-border",
+                    : "border border-border bg-white text-muted-foreground hover:text-ink",
                 )}
               >
                 {cat}
@@ -81,6 +116,12 @@ export function ConnectorGrid({
             ))}
           </div>
         </div>
+      ) : null}
+
+      {error ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Could not verify with Fastn: {error}
+        </p>
       ) : null}
 
       <div
@@ -98,13 +139,14 @@ export function ConnectorGrid({
           )}
         >
           {items.map((c) => {
-            const isOn = Boolean(connected[c.id]);
+            const row = rows[c.id];
+            const on = isConnected(row);
             return (
               <li
                 key={c.id}
                 className={cn(
                   "flex flex-col rounded-xl border bg-white p-4 transition",
-                  isOn
+                  on
                     ? "border-teal/40 ring-1 ring-teal/20"
                     : "border-border hover:border-slate-300",
                 )}
@@ -119,40 +161,32 @@ export function ConnectorGrid({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-medium text-ink">{c.name}</p>
-                      {c.scanReady ? (
-                        <span className="rounded-full bg-teal-soft px-2 py-0.5 text-[10px] font-semibold tracking-wide text-teal uppercase">
-                          Scan-ready
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium tracking-wide text-slate-500 uppercase">
-                          Catalog
-                        </span>
-                      )}
+                      <StatusBadge row={row} />
                     </div>
                     <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                       {c.blurb}
                     </p>
+                    {row?.lastError && !on ? (
+                      <p className="mt-1 text-[11px] text-amber-800">
+                        {row.lastError}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
-                <div className="mt-4 flex items-center gap-2">
+                <div className="mt-4">
                   <Button
                     type="button"
                     size="sm"
-                    variant={isOn ? "outline" : "default"}
-                    className="h-9 flex-1"
+                    variant={on ? "outline" : "default"}
+                    className="h-9 w-full"
+                    disabled={verifying && activeId === c.id}
                     onClick={() => {
-                      onConnect(c.id);
                       setActiveId(c.id);
-                      setDialogOpen(true);
+                      void markPending(c.id);
                     }}
                   >
-                    {isOn ? "Connected" : "Connect in Privy"}
+                    {on ? "Manage in Fastn" : "Connect"}
                   </Button>
-                  {isOn ? (
-                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-teal-soft text-teal">
-                      <Check className="h-4 w-4" aria-label="Connected" />
-                    </span>
-                  ) : null}
                 </div>
               </li>
             );
@@ -166,16 +200,11 @@ export function ConnectorGrid({
         </p>
       ) : (
         <p className="text-center text-xs text-muted-foreground">
-          Showing {items.length} of {CONNECTOR_CATALOG.length} connectors —
-          connections stay inside Privy
+          {verifiedIds.length} verified by Fastn · showing {items.length} of{" "}
+          {CONNECTOR_CATALOG.length}
+          {verifying ? " · checking…" : ""}
         </p>
       )}
-
-      <FastnConnectDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        connectorId={activeId}
-      />
     </div>
   );
 }

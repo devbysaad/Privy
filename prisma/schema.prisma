@@ -101,6 +101,23 @@ model Task {
   @@index([status])
 }
 
+/** A connector the workspace has wired up, verified against Fastn. */
+model Connection {
+  id           String    @id @default(cuid())
+  orgId        String    @default("default")
+  connectorId  String
+  status       String    @default("pending") // pending | connected | failed
+  source       String    @default("fastn")   // fastn | demo
+  externalId   String?   // Fastn connectionId
+  lastError    String?
+  verifiedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([orgId, connectorId])
+  @@index([orgId])
+}
+
 /** Operator workspace from onboarding — one per Clerk user. */
 model Workspace {
   id                  String   @id @default(cuid())

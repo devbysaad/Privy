@@ -3,13 +3,14 @@
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ClerkAuthPanel } from "@/components/auth/clerk-auth-panel";
 import { ConnectorGrid } from "@/components/connector-grid";
+import { PlatformLogo } from "@/components/connector-logo";
 import { Button } from "@/components/ui/button";
 import type { ConnectorId } from "@/lib/connectors";
 import { CONNECTOR_CATALOG } from "@/lib/connectors";
-import { platformLabel, ruleLabel } from "@/lib/labels";
+import { ruleLabel } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 const STEPS = ["Account", "Connect", "Discover", "Results"] as const;
@@ -56,6 +57,10 @@ export function OnboardingWizard() {
     if (!isSignedIn) setStep(1);
     else if (step === 1) setStep(2);
   }, [authLoaded, isSignedIn, step]);
+
+  const onConnectedChange = useCallback((ids: ConnectorId[]) => {
+    setConnected(Object.fromEntries(ids.map((id) => [id, true])));
+  }, []);
 
   async function runDiscovery() {
     setBusy(true);
@@ -124,9 +129,7 @@ export function OnboardingWizard() {
               connected={connected}
               busy={busy}
               error={error}
-              onConnect={(id) =>
-                setConnected((c) => ({ ...c, [id]: true }))
-              }
+              onConnectedChange={onConnectedChange}
               onNext={async () => {
                 setStep(3);
                 await runDiscovery();
@@ -287,13 +290,13 @@ function ConnectStep({
   connected,
   busy,
   error,
-  onConnect,
+  onConnectedChange,
   onNext,
 }: {
   connected: ConnectedMap;
   busy: boolean;
   error: string | null;
-  onConnect: (id: ConnectorId) => void;
+  onConnectedChange: (ids: ConnectorId[]) => void;
   onNext: () => Promise<void>;
 }) {
   const hasGithub = Boolean(connected.github);
@@ -304,16 +307,12 @@ function ConnectStep({
     <div className="space-y-5">
       <StepHeading
         title="Connect your stack"
-        subtitle={`Mark apps for this workspace without leaving Privy. Live scans use GitHub, Drive, and Slack (${scanReadyCount} scan-ready) when MCP is verified — ${catalogCount} apps in the catalog.`}
+        subtitle={`Authorize apps through the Fastn hub without leaving Privy. Live scans use GitHub, Drive, and Slack (${scanReadyCount} scan-ready) — ${catalogCount} apps in the catalog.`}
       />
       <p className="text-xs text-muted-foreground">
-        Connections stay inside Privy · search or filter by category
+        Only connections Fastn confirms are marked verified
       </p>
-      <ConnectorGrid
-        connected={connected}
-        onConnect={onConnect}
-        compact
-      />
+      <ConnectorGrid onChange={onConnectedChange} compact />
       <ErrorText error={error} />
       <Button
         type="button"
@@ -414,8 +413,10 @@ function ResultsStep({
               <span className="truncate font-medium text-ink">
                 {id.displayName}
               </span>
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {id.sourcePlatforms.map((p) => platformLabel(p)).join(", ")}
+              <span className="flex shrink-0 items-center gap-1">
+                {id.sourcePlatforms.map((p) => (
+                  <PlatformLogo key={p} platform={p} size="sm" />
+                ))}
               </span>
             </li>
           ))}

@@ -1,4 +1,11 @@
 import Link from "next/link";
+import { ConnectorLogo } from "@/components/connector-logo";
+
+const AUTH_LOGOS = [
+  { id: "github" as const, name: "GitHub" },
+  { id: "drive" as const, name: "Google Drive" },
+  { id: "slack" as const, name: "Slack" },
+];
 
 export function AuthShell({
   title,
@@ -15,7 +22,6 @@ export function AuthShell({
     <div className="privy-mesh relative flex min-h-full flex-1 flex-col overflow-hidden lg:flex-row">
       <div className="privy-noise pointer-events-none absolute inset-0 opacity-50" />
 
-      {/* Brand panel */}
       <aside className="relative z-10 flex flex-col justify-between border-b border-border/60 px-8 py-8 lg:w-[42%] lg:border-b-0 lg:border-r lg:px-12 lg:py-12">
         <Link
           href="/"
@@ -31,15 +37,18 @@ export function AuthShell({
             Connect tools through Fastn, review findings, and approve changes —
             nothing writes until you say so.
           </p>
-          <div className="mt-8 hidden gap-3 lg:flex">
-            {["GitHub", "Drive", "Slack", "20+ via Fastn"].map((label) => (
-              <span
-                key={label}
-                className="rounded-full border border-border/80 bg-white/70 px-3 py-1 text-[11px] font-medium text-ink"
-              >
-                {label}
-              </span>
+          <div className="mt-8 hidden items-center gap-2 lg:flex">
+            {AUTH_LOGOS.map((logo) => (
+              <ConnectorLogo
+                key={logo.id}
+                id={logo.id}
+                name={logo.name}
+                size="md"
+              />
             ))}
+            <span className="ml-1 rounded-full border border-border/80 bg-white/70 px-3 py-1 text-[11px] font-medium text-ink">
+              20+ via Fastn
+            </span>
           </div>
         </div>
         <p className="mt-10 hidden text-xs text-muted-foreground lg:block">
@@ -47,7 +56,6 @@ export function AuthShell({
         </p>
       </aside>
 
-      {/* Form panel */}
       <main className="relative z-10 flex flex-1 flex-col justify-center px-6 py-12 sm:px-10 lg:px-16">
         <div className="mx-auto w-full max-w-md">
           <h1 className="font-heading text-2xl font-semibold tracking-tight text-ink">
