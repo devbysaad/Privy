@@ -38,7 +38,7 @@ export default async function HomePage() {
               nativeButton={false}
               render={<Link href="/dashboard?demo=1" />}
             >
-              Open findings
+              Explore sample org
             </Button>
           ) : (
             <>
@@ -85,7 +85,7 @@ export default async function HomePage() {
                   nativeButton={false}
                   render={<Link href="/dashboard?demo=1" />}
                 >
-                  Try with sample org
+                  Explore the sample org
                 </Button>
                 <Button
                   size="lg"

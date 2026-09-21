@@ -53,20 +53,7 @@ export function useConnections() {
     void refresh(true);
   }, [refresh]);
 
-  /** Record intent to connect; status stays pending until Fastn confirms. */
-  const markPending = useCallback(
-    async (connectorId: ConnectorId) => {
-      await fetch("/api/connections", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ connectorId }),
-      }).catch(() => null);
-      await refresh(false);
-    },
-    [refresh],
-  );
-
-  return { rows, loading, verifying, error, refresh, markPending };
+  return { rows, loading, verifying, error, refresh };
 }
 
 export function isConnected(row: ConnectionRow | undefined): boolean {

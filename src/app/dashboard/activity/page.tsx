@@ -4,6 +4,7 @@ import { SourceBadge } from "@/components/source-badge";
 import { buildCompanyEvents } from "@/lib/fixtures/company-story";
 import { eventsByDay, findRelatedEvents } from "@/lib/intelligence/related";
 import { formatClock } from "@/lib/labels";
+import { getLatestScan, runScan, getScan } from "@/lib/scan/orchestrator";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,19 @@ export default async function ActivityPage({
   const sp = await searchParams;
   const demo = sp.demo === "1";
   const q = demo ? "?demo=1" : "";
-  const events = buildCompanyEvents();
+
+  let scan = await getLatestScan("default", demo);
+  if (!scan && demo) {
+    const seeded = await runScan({ mode: "demo", orgId: "default" });
+    scan = await getScan(seeded.scanId);
+  }
+  const findings = (scan?.findings ?? []).map((f) => ({
+    id: f.id,
+    title: f.title,
+    severity: f.severity,
+  }));
+
+  const events = buildCompanyEvents(findings);
   const byDay = eventsByDay(events);
   const focus = sp.focus
     ? events.find((e) => e.id === sp.focus)
@@ -32,7 +45,8 @@ export default async function ActivityPage({
           Activity
         </h1>
         <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">
-          One timeline across GitHub, Slack, Jira, and Privy Security.
+          One timeline across GitHub, Slack, Jira, and Privy Security — security
+          rows match your current scan findings.
         </p>
       </div>
 
@@ -77,7 +91,7 @@ export default async function ActivityPage({
           ))}
         </div>
 
-        <aside className="rounded-2xl border border-border bg-white p-4 h-fit">
+        <aside className="h-fit rounded-2xl border border-border bg-white p-4">
           <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
             Related activity
           </h2>
@@ -100,6 +114,17 @@ export default async function ActivityPage({
                   ))
                 )}
               </ul>
+              {focus.source === "security" &&
+              focus.metadata &&
+              typeof focus.metadata === "object" &&
+              "findingId" in focus.metadata ? (
+                <Link
+                  href={`/findings/${String((focus.metadata as { findingId: string }).findingId)}${q}`}
+                  className="mt-4 inline-block text-sm font-medium text-ink underline-offset-2 hover:underline"
+                >
+                  Open finding →
+                </Link>
+              ) : null}
             </>
           ) : null}
         </aside>

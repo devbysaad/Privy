@@ -6,7 +6,7 @@ import type { Graph, PlatformCoverage } from "@/types";
 
 /**
  * Run discovery for the signed-in operator.
- * No Workspace table — uses Clerk userId as orgId.
+ * Always uses orgId "default" so Overview / Findings / Assistant share one workspace.
  */
 export async function POST() {
   const { userId } = await auth();
@@ -15,7 +15,7 @@ export async function POST() {
   }
 
   const mode = preferredScanMode();
-  const orgId = userId;
+  const orgId = "default";
 
   try {
     const result = await runScan({ mode, orgId });

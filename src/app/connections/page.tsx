@@ -21,8 +21,8 @@ function ConnectionsInner() {
           Connections
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          Authorize {CONNECTOR_CATALOG.length} apps through the Fastn hub{" "}
-          <span className="font-medium text-ink">inside Privy</span>. Live scans
+          Authorize {CONNECTOR_CATALOG.length} apps on Fastn (same tab), then
+          press Back — Privy verifies what Fastn reports as active. Live scans
           use GitHub, Google Drive, and Slack ({scanReadyCount} scan-ready).
         </p>
         <p className="mt-2 text-xs text-muted-foreground">

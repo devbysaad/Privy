@@ -33,9 +33,9 @@ Without either, the app uses template explanations.
 
 ---
 
-## In-app Fastn embed (Connections / onboarding)
+## In-app Fastn connect (Connections / onboarding)
 
-Connect renders the Fastn Integration Hub **inline inside Privy** — no new tab, no overlay. The iframe sends `frame-ancestors *`, so embedding is supported.
+Connect leaves Privy **same-tab** for the Fastn Integration Hub (minted `emb_` URL). Authorize there, then press **Back** — Privy restores with `?fastn=return` and verifies against Fastn.
 
 | Variable | Why |
 |----------|-----|

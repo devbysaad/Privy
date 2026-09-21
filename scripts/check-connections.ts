@@ -33,11 +33,32 @@ const matched = matchFastnConnections(
 
 const ids = matched.map((m) => m.connectorId).sort();
 assert.deepEqual(ids, ["drive", "github"], `unexpected matches: ${ids}`);
-assert.equal(matched.find((m) => m.connectorId === "github")?.externalId, "ucl:github");
+assert.equal(
+  matched.find((m) => m.connectorId === "github")?.externalId,
+  "ucl:github",
+);
+
+// Prefer connector.slug even when the UUID map is empty.
+const fromSlug = matchFastnConnections(
+  [
+    {
+      id: "ucl:slack",
+      connectorId: "any-uuid",
+      status: "ACTIVE",
+      connector: { slug: "slack" },
+    },
+  ],
+  new Map(),
+  catalogIds,
+);
+assert.deepEqual(
+  fromSlug.map((m) => m.connectorId),
+  ["slack"],
+);
 
 // Nothing is connected when Fastn reports nothing.
 assert.deepEqual(matchFastnConnections([], slugByUuid, catalogIds), []);
 
 console.log(
-  "connections ok: only ACTIVE + known-slug rows verify (drive→googleDrive aliased)",
+  "connections ok: ACTIVE + slug (inline or catalog) verify; drive→googleDrive aliased",
 );

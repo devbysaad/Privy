@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/app-shell";
 import { AssistantChat } from "@/components/assistant-chat";
+import { privyDataMode } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,9 @@ export default async function AssistantPage({
   searchParams: Promise<{ demo?: string }>;
 }) {
   const sp = await searchParams;
-  const demo = sp.demo === "1";
+  // Fixture stage defaults to sample data so chat syncs with Findings.
+  const demo =
+    sp.demo === "1" || (sp.demo !== "0" && privyDataMode() !== "live");
 
   return (
     <AppShell demo={demo}>
@@ -21,8 +24,8 @@ export default async function AssistantPage({
           AI Command Center
         </h1>
         <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">
-          Ask about company activity, work, or security. Answers are grounded in
-          Privy data — never invents events or revokes access.
+          Ask about company activity, work, or security. Answers sync to the
+          same scan as Findings — never invents events or revokes access.
         </p>
       </div>
       <AssistantChat demo={demo} />

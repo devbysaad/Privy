@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CONNECTOR_CATALOG, type ConnectorId } from "@/lib/connectors";
 import { ConnectorLogo } from "@/components/connector-logo";
-import { FastnConnectPanel } from "@/components/fastn-connect-panel";
+import {
+  FastnConnectPanel,
+  FASTN_RETURN_KEY,
+  goToFastnHub,
+} from "@/components/fastn-connect-panel";
 import {
   isConnected,
   useConnections,
@@ -21,14 +25,31 @@ function StatusBadge({ row }: { row: ConnectionRow | undefined }) {
       </span>
     );
   }
-  if (row?.status === "pending") {
-    return (
-      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-amber-800 uppercase">
-        Not confirmed
-      </span>
-    );
-  }
   return null;
+}
+
+function readReturnMarker(): ConnectorId | null {
+  try {
+    const id = sessionStorage.getItem(FASTN_RETURN_KEY);
+    if (!id) return null;
+    if (!CONNECTOR_CATALOG.some((c) => c.id === id)) return null;
+    return id as ConnectorId;
+  } catch {
+    return null;
+  }
+}
+
+function clearReturnMarker() {
+  try {
+    sessionStorage.removeItem(FASTN_RETURN_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function isReturnQuery(): boolean {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("fastn") === "return";
 }
 
 export function ConnectorGrid({
@@ -42,10 +63,51 @@ export function ConnectorGrid({
   /** Reports verified connector ids so pages can gate on real state. */
   onChange?: (connectedIds: ConnectorId[]) => void;
 }) {
-  const { rows, verifying, error, refresh, markPending } = useConnections();
+  const { rows, verifying, error, refresh } = useConnections();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("all");
   const [activeId, setActiveId] = useState<ConnectorId | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState(false);
+
+  const handleReturn = useCallback(() => {
+    const marked = readReturnMarker();
+    const fromQuery = isReturnQuery();
+    if (!marked && !fromQuery) return;
+    if (marked) setActiveId(marked);
+    clearReturnMarker();
+    void refresh(true);
+  }, [refresh]);
+
+  // Full reload / fresh mount with ?fastn=return
+  useEffect(() => {
+    handleReturn();
+  }, [handleReturn]);
+
+  // Back from Fastn often restores via bfcache — mount effects do not re-run.
+  useEffect(() => {
+    function onPageShow(e: PageTransitionEvent) {
+      if (e.persisted || isReturnQuery() || readReturnMarker()) {
+        handleReturn();
+      }
+    }
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, [handleReturn]);
+
+  const startConnect = useCallback(
+    async (id: ConnectorId) => {
+      setActiveId(id);
+      setOpenError(null);
+      setLeaving(true);
+      const err = await goToFastnHub(id);
+      setLeaving(false);
+      if (err) setOpenError(err);
+    },
+    [],
+  );
+
+  const recheck = useCallback(() => void refresh(true), [refresh]);
 
   const verifiedIds = useMemo(
     () =>
@@ -81,8 +143,15 @@ export function ConnectorGrid({
       {activeId ? (
         <FastnConnectPanel
           connectorId={activeId}
-          onClose={() => setActiveId(null)}
-          onConnected={() => void refresh(true)}
+          connected={isConnected(rows[activeId])}
+          openError={openError}
+          verifying={verifying || leaving}
+          onRecheck={recheck}
+          onReopen={() => void startConnect(activeId)}
+          onClose={() => {
+            setActiveId(null);
+            setOpenError(null);
+          }}
         />
       ) : null}
 
@@ -179,13 +248,14 @@ export function ConnectorGrid({
                     size="sm"
                     variant={on ? "outline" : "default"}
                     className="h-9 w-full"
-                    disabled={verifying && activeId === c.id}
-                    onClick={() => {
-                      setActiveId(c.id);
-                      void markPending(c.id);
-                    }}
+                    disabled={leaving}
+                    onClick={() => void startConnect(c.id)}
                   >
-                    {on ? "Manage in Fastn" : "Connect"}
+                    {leaving && activeId === c.id
+                      ? "Opening Fastn…"
+                      : on
+                        ? "Manage in Fastn"
+                        : "Connect"}
                   </Button>
                 </div>
               </li>

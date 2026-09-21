@@ -1,5 +1,6 @@
 /**
  * Grounded company-intelligence assistant — classify → retrieve → template.
+ * Security answers sync to the same scan findings as Overview / Findings.
  */
 import {
   buildCompanyEvents,
@@ -24,6 +25,13 @@ export type AssistantCategory =
   | "task_request"
   | "general";
 
+export type AssistantFinding = {
+  id: string;
+  title: string;
+  severity: string;
+  ruleId?: string;
+};
+
 export function classifyQuestion(q: string): AssistantCategory {
   const s = q.toLowerCase();
   if (/create (a )?task|make (a )?task|add (a )?task/.test(s))
@@ -47,18 +55,26 @@ export function classifyQuestion(q: string): AssistantCategory {
   return "general";
 }
 
+function demoQ(demo: boolean) {
+  return demo ? "?demo=1" : "";
+}
+
 function buildContext(
   category: AssistantCategory,
-  criticalFindings: number,
-  findingTitles: string[],
+  findings: AssistantFinding[],
+  demo: boolean,
 ) {
-  const events = buildCompanyEvents();
+  const criticalFindings = findings.filter((f) => f.severity === "critical")
+    .length;
+  const findingTitles = findings.map((f) => f.title);
+  const events = buildCompanyEvents(findings);
   const snapshot = buildFixtureSnapshot(criticalFindings);
   const prs = buildGithubPrs();
   const issues = buildJiraIssues();
   const channels = buildSlackChannels();
   const payment = events.find((e) => e.id === "ev-gh-pr-482")!;
   const related = findRelatedEvents(payment, events);
+  const q = demoQ(demo);
 
   switch (category) {
     case "company_status":
@@ -66,7 +82,7 @@ function buildContext(
         snapshot,
         recentEvents: events.slice(0, 6).map(brief),
         criticalFindings,
-        findingTitles: findingTitles.slice(0, 5),
+        findings: findings.slice(0, 5),
         relatedPayment: related.map(brief),
       };
     case "changed":
@@ -86,27 +102,40 @@ function buildContext(
         security: { criticalFindings },
       };
     case "attention":
-      return { items: listAttentionItems(criticalFindings) };
+      return {
+        items: listAttentionItems(criticalFindings, findings, q),
+      };
     case "github":
-      return { prs, repos: events.filter((e) => e.source === "github").map(brief) };
+      return {
+        prs,
+        repos: events.filter((e) => e.source === "github").map(brief),
+      };
     case "jira":
       return { issues };
     case "slack":
-      return { channels, activity: events.filter((e) => e.source === "slack").map(brief) };
+      return {
+        channels,
+        activity: events.filter((e) => e.source === "slack").map(brief),
+      };
     case "security":
-      return { criticalFindings, findingTitles, note: "Findings are deterministic rule signals." };
+      return {
+        criticalFindings,
+        findings,
+        note: "Findings are deterministic rule signals from the same scan as Findings.",
+      };
     case "cross_system":
     case "task_request":
       return {
         anchor: brief(payment),
         related: related.map(brief),
         jira: issues.find((i) => i.key === "PAY-182"),
+        topFinding: findings[0] ?? null,
       };
     default:
       return {
         snapshot,
         recentEvents: events.slice(0, 4).map(brief),
-        findingTitles: findingTitles.slice(0, 3),
+        findings: findings.slice(0, 3),
       };
   }
 }
@@ -130,16 +159,23 @@ function brief(e: {
 function templateAnswer(
   category: AssistantCategory,
   ctx: ReturnType<typeof buildContext>,
+  demo: boolean,
 ): string {
+  const q = demoQ(demo);
   if (category === "company_status") {
     const c = ctx as {
-      snapshot: { people: number | null; activePrs: number | null; openIssues: number | null };
+      snapshot: {
+        people: number | null;
+        activePrs: number | null;
+        openIssues: number | null;
+      };
       criticalFindings: number;
       recentEvents: Array<{ source: string; title: string }>;
       relatedPayment: Array<{ source: string; title: string }>;
+      findings: AssistantFinding[];
     };
     return [
-      "Here's what's happening today (from Privy fixture + scan data):",
+      "Here's what's happening today (work fixtures + your current scan):",
       "",
       "WORK",
       `• ${c.snapshot.activePrs ?? "N/A"} active GitHub pull requests`,
@@ -152,13 +188,16 @@ function templateAnswer(
         .slice(0, 4)
         .map((e) => `• [${e.source}] ${e.title}`),
       "",
-      "SECURITY",
-      `• ${c.criticalFindings} critical finding(s) need human review`,
+      "SECURITY (same scan as Findings)",
+      ...(c.findings.length
+        ? c.findings.map((f) => `• [${f.severity}] ${f.title}`)
+        : [`• ${c.criticalFindings} critical finding(s) need human review`]),
       "",
       "Payment-related activity may be related across GitHub, Jira, and Slack:",
       ...c.relatedPayment.map((e) => `• [${e.source}] ${e.title}`),
       "",
       "Relationships are inferred from shared keywords/IDs — not proven causation.",
+      `Open /dashboard/findings${q} to investigate.`,
     ].join("\n");
   }
   if (category === "changed") {
@@ -182,7 +221,7 @@ function templateAnswer(
       "• #engineering activity elevated around payments",
       "",
       "Security",
-      `• ${c.security.criticalFindings} critical finding(s)`,
+      `• ${c.security.criticalFindings} critical finding(s) — same scan as Findings`,
     ].join("\n");
   }
   if (category === "attention") {
@@ -194,23 +233,31 @@ function templateAnswer(
     ].join("\n");
   }
   if (category === "task_request") {
+    const c = ctx as { topFinding: AssistantFinding | null };
     return [
       "I can create a follow-up task.",
       "",
-      "Suggested: Investigate payment issue",
-      "Related: PAY-182, billing-service, payment PR #482",
+      c.topFinding
+        ? `Suggested: Review finding — ${c.topFinding.title}`
+        : "Suggested: Investigate payment issue",
+      c.topFinding
+        ? `Linked finding: ${c.topFinding.id}`
+        : "Related: PAY-182, billing-service, payment PR #482",
       "",
       "Confirm with the Create Task button below — I will not create tasks silently.",
     ].join("\n");
   }
   if (category === "security") {
-    const c = ctx as { criticalFindings: number; findingTitles: string[] };
+    const c = ctx as {
+      criticalFindings: number;
+      findings: AssistantFinding[];
+    };
     return [
-      "Security intelligence (deterministic rules, not AI detection):",
+      "Security intelligence (deterministic rules from your latest scan — same data as Findings):",
       `• ${c.criticalFindings} critical finding(s)`,
-      ...c.findingTitles.map((t) => `• ${t}`),
+      ...c.findings.map((f) => `• [${f.severity}] ${f.title}`),
       "",
-      "Open Findings to investigate → counterpoint → human approval → dry-run.",
+      "Open a finding to investigate → counterpoint → human approval → dry-run.",
       "Privy never auto-revokes access.",
     ].join("\n");
   }
@@ -219,22 +266,24 @@ function templateAnswer(
 
 export async function answerAssistant(opts: {
   question: string;
-  criticalFindings: number;
-  findingTitles: string[];
+  findings: AssistantFinding[];
+  demo?: boolean;
 }): Promise<{
   category: AssistantCategory;
   answer: string;
-  suggestTask?: { title: string; description: string; relatedEventId: string };
+  suggestTask?: {
+    title: string;
+    description: string;
+    relatedEventId?: string;
+    relatedFindingId?: string;
+  };
   links?: Array<{ label: string; href: string }>;
 }> {
+  const demo = opts.demo !== false;
+  const q = demoQ(demo);
   const category = classifyQuestion(opts.question);
-  const ctx = buildContext(
-    category,
-    opts.criticalFindings,
-    opts.findingTitles,
-  );
-
-  const answer = templateAnswer(category, ctx);
+  const ctx = buildContext(category, opts.findings, demo);
+  const answer = templateAnswer(category, ctx, demo);
 
   const result: {
     category: AssistantCategory;
@@ -242,31 +291,59 @@ export async function answerAssistant(opts: {
     suggestTask?: {
       title: string;
       description: string;
-      relatedEventId: string;
+      relatedEventId?: string;
+      relatedFindingId?: string;
     };
     links?: Array<{ label: string; href: string }>;
   } = {
     category,
     answer,
     links: [
-      { label: "Activity", href: "/dashboard/activity?demo=1" },
-      { label: "Findings", href: "/dashboard/findings?demo=1" },
+      { label: "Activity", href: `/dashboard/activity${q}` },
+      { label: "Findings", href: `/dashboard/findings${q}` },
     ],
   };
 
-  if (category === "task_request" || category === "cross_system") {
-    result.suggestTask = {
-      title: "Investigate payment issue",
-      description:
-        "Follow up on PAY-182 / payment gateway PR across GitHub, Jira, and Slack.",
-      relatedEventId: "ev-gh-pr-482",
-    };
+  if (category === "security" && opts.findings[0]) {
+    const f = opts.findings[0];
     result.links = [
-      { label: "Jira", href: "/dashboard/jira?demo=1" },
+      {
+        label: "Open top finding",
+        href: `/findings/${f.id}${q}`,
+      },
+      { label: "All findings", href: `/dashboard/findings${q}` },
+    ];
+    result.suggestTask = {
+      title: `Review: ${f.title.slice(0, 80)}`,
+      description: `Investigate finding ${f.id} (${f.severity}) — same scan as AI Command Center.`,
+      relatedFindingId: f.id,
+    };
+  }
+
+  if (category === "task_request" || category === "cross_system") {
+    const top = opts.findings[0];
+    result.suggestTask = top
+      ? {
+          title: `Follow up: ${top.title.slice(0, 80)}`,
+          description: `Tied to finding ${top.id} and payment story (PAY-182 / PR #482).`,
+          relatedFindingId: top.id,
+          relatedEventId: "ev-gh-pr-482",
+        }
+      : {
+          title: "Investigate payment issue",
+          description:
+            "Follow up on PAY-182 / payment gateway PR across GitHub, Jira, and Slack.",
+          relatedEventId: "ev-gh-pr-482",
+        };
+    result.links = [
+      { label: "Jira", href: `/dashboard/jira${q}` },
       {
         label: "Related activity",
-        href: "/dashboard/activity?demo=1&focus=ev-gh-pr-482",
+        href: `/dashboard/activity${q}${q ? "&" : "?"}focus=ev-gh-pr-482`,
       },
+      ...(top
+        ? [{ label: "Finding", href: `/findings/${top.id}${q}` }]
+        : []),
     ];
   }
 

@@ -1,8 +1,4 @@
-/** Fastn connector catalog — UI only. Scans use github/drive/slack collectors.
- * Connect hosts authorize UI; mcp.fastn.dev/shttp is the API only.
- */
-export const FASTN_PORTAL_URL = "https://connect.fastn.dev";
-
+/** Fastn connector catalog — UI only. Scans use github/drive/slack collectors. */
 export type ConnectorId =
   | "github"
   | "drive"

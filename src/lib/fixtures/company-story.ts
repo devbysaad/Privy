@@ -16,8 +16,10 @@ const ORG = "default";
 /** Anchor “today” for the demo story (matches STAGE_RUNBOOK date). */
 export const STORY_DAY = "2026-09-19";
 
-export function buildCompanyEvents(): CompanyEvent[] {
-  return [
+export function buildCompanyEvents(
+  findings?: Array<{ id: string; title: string; severity?: string }>,
+): CompanyEvent[] {
+  const base: CompanyEvent[] = [
     {
       id: "ev-gh-pr-482",
       organizationId: ORG,
@@ -89,18 +91,42 @@ export function buildCompanyEvents(): CompanyEvent[] {
         keywords: ["payment", "timeout", "PAY-182"],
       },
     },
-    {
-      id: "ev-sec-fran",
+  ];
+
+  // Prefer scan finding titles so Activity / Assistant match Findings.
+  let securityEvents: CompanyEvent[] =
+    findings?.slice(0, 3).map((f, i) => ({
+      id: `ev-sec-${f.id}`,
       organizationId: ORG,
-      source: "security",
+      source: "security" as const,
       type: "finding_open",
-      title: "Fran Marketing’s GitHub access requires review",
-      description: "Department-role mismatch signal (deterministic rule)",
-      actorId: "id-fran",
-      actorName: "Fran Marketing",
-      timestamp: `${STORY_DAY}T09:20:00.000Z`,
-      metadata: { ruleId: "department-role-mismatch", keywords: ["admin", "marketing"] },
-    },
+      title: f.title,
+      description: `Scan finding (${f.severity ?? "open"}) — same data as Findings`,
+      timestamp: `${STORY_DAY}T09:${String(20 - i).padStart(2, "0")}:00.000Z`,
+      metadata: { findingId: f.id, severity: f.severity },
+    })) ?? [];
+
+  if (securityEvents.length === 0) {
+    securityEvents = [
+      {
+        id: "ev-sec-fran",
+        organizationId: ORG,
+        source: "security",
+        type: "finding_open",
+        title: "Fran Marketing’s GitHub access requires review",
+        description: "Department-role mismatch signal (deterministic rule)",
+        actorId: "id-fran",
+        actorName: "Fran Marketing",
+        timestamp: `${STORY_DAY}T09:20:00.000Z`,
+        metadata: {
+          ruleId: "department-role-mismatch",
+          keywords: ["admin", "marketing"],
+        },
+      },
+    ];
+  }
+
+  const rest: CompanyEvent[] = [
     {
       id: "ev-gh-pr-merged",
       organizationId: ORG,
@@ -126,6 +152,8 @@ export function buildCompanyEvents(): CompanyEvent[] {
       metadata: { keywords: ["payment", "release"] },
     },
   ];
+
+  return [...base, ...securityEvents, ...rest];
 }
 
 export function buildGithubRepos(): GithubRepoView[] {
@@ -270,12 +298,25 @@ export function buildFixtureSnapshot(criticalFindings: number): CompanySnapshot 
   };
 }
 
-export function listAttentionItems(criticalFindings: number) {
+export function listAttentionItems(
+  criticalFindings: number,
+  findings?: Array<{ id: string; title: string; severity?: string }>,
+  q = "?demo=1",
+) {
   const items: Array<{ label: string; href: string; kind: string }> = [];
-  if (criticalFindings > 0) {
+  const critical = (findings ?? []).filter((f) => f.severity === "critical");
+  if (critical.length > 0) {
+    for (const f of critical.slice(0, 3)) {
+      items.push({
+        label: f.title,
+        href: `/findings/${f.id}${q}`,
+        kind: "Critical security finding",
+      });
+    }
+  } else if (criticalFindings > 0) {
     items.push({
       label: `${criticalFindings} critical security finding(s)`,
-      href: "/dashboard/findings?demo=1",
+      href: `/dashboard/findings${q}`,
       kind: "Critical security finding",
     });
   }
@@ -283,7 +324,7 @@ export function listAttentionItems(criticalFindings: number) {
   for (const j of criticalJira) {
     items.push({
       label: `${j.key} — ${j.title}`,
-      href: "/dashboard/jira?demo=1",
+      href: `/dashboard/jira${q}`,
       kind: "Critical Jira issue",
     });
   }
@@ -291,7 +332,7 @@ export function listAttentionItems(criticalFindings: number) {
   for (const p of openPrs.slice(0, 2)) {
     items.push({
       label: `PR #${p.number} — ${p.title}`,
-      href: "/dashboard/github?demo=1",
+      href: `/dashboard/github${q}`,
       kind: "Open pull request",
     });
   }

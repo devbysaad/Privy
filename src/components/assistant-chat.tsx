@@ -16,10 +16,13 @@ const QUICK = [
 type AssistantResponse = {
   answer: string;
   category: string;
+  scanId?: string | null;
+  findingCount?: number;
   suggestTask?: {
     title: string;
     description: string;
-    relatedEventId: string;
+    relatedEventId?: string;
+    relatedFindingId?: string;
   };
   links?: Array<{ label: string; href: string }>;
 };
@@ -40,7 +43,7 @@ export function AssistantChat({ demo }: { demo?: boolean }) {
       const res = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q }),
+        body: JSON.stringify({ question: q, demo: Boolean(demo) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Assistant failed");
@@ -64,11 +67,12 @@ export function AssistantChat({ demo }: { demo?: boolean }) {
           description: result.suggestTask.description,
           priority: "high",
           relatedEventId: result.suggestTask.relatedEventId,
+          relatedFindingId: result.suggestTask.relatedFindingId,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Task failed");
-      setTaskMsg("Task created.");
+      setTaskMsg("Task created — linked to the same finding when available.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Task failed");
     } finally {
@@ -120,9 +124,17 @@ export function AssistantChat({ demo }: { demo?: boolean }) {
 
       {result ? (
         <div className="rounded-2xl border border-border bg-white p-5">
-          <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-            {result.category.replace(/_/g, " ")}
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+              {result.category.replace(/_/g, " ")}
+            </p>
+            {typeof result.findingCount === "number" ? (
+              <p className="text-[10px] text-muted-foreground">
+                · synced {result.findingCount} finding
+                {result.findingCount === 1 ? "" : "s"} from scan
+              </p>
+            ) : null}
+          </div>
           <pre className="mt-3 whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink">
             {result.answer}
           </pre>
@@ -131,7 +143,7 @@ export function AssistantChat({ demo }: { demo?: boolean }) {
               {result.links.map((l) => (
                 <Link
                   key={l.href}
-                  href={l.href.includes("?") ? l.href : `${l.href}${q}`}
+                  href={l.href}
                   className="text-sm font-medium text-ink underline-offset-2 hover:underline"
                 >
                   {l.label} →

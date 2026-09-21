@@ -106,8 +106,17 @@ export async function mintEmbedToken(opts: {
     }
 
     const expiresIn = json.data?.expiresIn ?? json.expiresIn ?? 900;
-    const iframeUrl = `${host}/api/v1/embed/iframe?token=${encodeURIComponent(token)}&tenant-id=${encodeURIComponent(endOrgId!)}`;
-    return { ok: true, token, iframeUrl, expiresIn, endOrgId: endOrgId! };
+    const iframeUrl = new URL(`${host}/api/v1/embed/iframe`);
+    iframeUrl.searchParams.set("token", token);
+    iframeUrl.searchParams.set("tenant-id", endOrgId!);
+    iframeUrl.searchParams.set("title", "Privy");
+    return {
+      ok: true,
+      token,
+      iframeUrl: iframeUrl.toString(),
+      expiresIn,
+      endOrgId: endOrgId!,
+    };
   } catch (err) {
     return {
       ok: false,
@@ -163,11 +172,13 @@ export type FastnConnectionRow = {
   id?: string;
   connectorId?: string;
   status?: string;
+  connector?: { slug?: string; name?: string; domain?: string };
 };
 
 /**
  * Pure mapping: Fastn connection rows → our catalog ids.
  * Only ACTIVE rows whose connector resolves to a known slug count.
+ * Prefers row.connector.slug; falls back to slugByUuid when missing.
  */
 export function matchFastnConnections(
   rows: readonly FastnConnectionRow[],
@@ -179,8 +190,8 @@ export function matchFastnConnections(
   );
   const matched: LiveConnection[] = [];
   for (const row of rows) {
-    if (row.status !== "ACTIVE" || !row.connectorId) continue;
-    const slug = slugByUuid.get(row.connectorId);
+    if (row.status !== "ACTIVE") continue;
+    const slug = row.connector?.slug ?? (row.connectorId ? slugByUuid.get(row.connectorId) : undefined);
     if (!slug) continue;
     const catalogId = slugToCatalogId.get(normalize(slug));
     if (!catalogId) continue;
@@ -208,17 +219,23 @@ export async function listFastnConnections(
   }
 
   try {
-    const [byUuid, res] = await Promise.all([
-      connectorSlugsByUuid(),
-      fetch(`${fastnEmbedHost()}/api/v1/connections`, { headers: fastnHeaders() }),
-    ]);
+    const res = await fetch(`${fastnEmbedHost()}/api/v1/connections`, {
+      headers: fastnHeaders(),
+    });
     if (!res.ok) {
       return { ok: false, message: `Fastn connections failed (${res.status})` };
     }
     const json = (await res.json()) as { data?: FastnConnectionRow[] };
+    const rows = json.data ?? [];
+    const needsCatalog = rows.some(
+      (r) => r.status === "ACTIVE" && !r.connector?.slug && r.connectorId,
+    );
+    const byUuid = needsCatalog
+      ? await connectorSlugsByUuid()
+      : new Map<string, string>();
     return {
       ok: true,
-      connections: matchFastnConnections(json.data ?? [], byUuid, catalogIds),
+      connections: matchFastnConnections(rows, byUuid, catalogIds),
     };
   } catch (err) {
     return {

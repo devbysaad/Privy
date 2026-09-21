@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
+    "postinstall": "prisma generate",
     "lint": "eslint",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -17,7 +18,8 @@
     "seed:demo": "npx --yes tsx scripts/seed-demo.ts",
     "rehearse": "npx --yes tsx scripts/rehearse.ts",
     "check:intelligence": "npx --yes tsx src/lib/intelligence/check.ts",
-    "check": "tsx src/lib/rules/check.ts && tsx scripts/check-connectors.ts && tsx scripts/check-connections.ts && tsx src/lib/intelligence/check.ts"
+    "check": "tsx src/lib/rules/check.ts && tsx scripts/check-connectors.ts && tsx scripts/check-connections.ts && tsx src/lib/intelligence/check.ts",
+    "prepare:demo": "prisma generate && prisma db push && npm run seed:demo"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",

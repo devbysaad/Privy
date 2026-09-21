@@ -36,9 +36,14 @@ export default async function DashboardPage({
   const snapshot = buildFixtureSnapshot(critical);
   if (peopleFromScan != null) snapshot.people = peopleFromScan;
 
-  const events = buildCompanyEvents().slice(0, 6);
-  const attention = listAttentionItems(critical);
+  const findingBrief = findings.map((f) => ({
+    id: f.id,
+    title: f.title,
+    severity: f.severity,
+  }));
   const q = demo ? "?demo=1" : "";
+  const events = buildCompanyEvents(findingBrief).slice(0, 8);
+  const attention = listAttentionItems(critical, findingBrief, q);
 
   return (
     <AppShell demo={demo || Boolean(scan?.isDemo)}>
