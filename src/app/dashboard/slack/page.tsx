@@ -1,8 +1,13 @@
 import { AppShell } from "@/components/app-shell";
 import {
+  LiveConnectionCard,
+  NotConnectedCard,
+} from "@/components/live-connection-card";
+import {
   buildCompanyEvents,
   buildSlackChannels,
 } from "@/lib/fixtures/company-story";
+import { getLiveConnection } from "@/lib/live-connection";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +18,34 @@ export default async function SlackPage({
 }) {
   const sp = await searchParams;
   const demo = sp.demo === "1";
+  const live = demo ? null : await getLiveConnection("slack");
+  const q = demo ? "?demo=1" : "";
+
+  if (!demo) {
+    return (
+      <AppShell demo={false}>
+        <div className="mb-8">
+          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Work · Slack
+          </p>
+          <h1 className="font-heading mt-1 text-2xl font-semibold text-ink">
+            Slack
+          </h1>
+        </div>
+        {live ? (
+          <LiveConnectionCard
+            appName="Slack"
+            verifiedAt={live.verifiedAt!}
+            externalId={live.externalId}
+            connectHref={`/connections${q}`}
+          />
+        ) : (
+          <NotConnectedCard appName="Slack" connectHref={`/connections${q}`} />
+        )}
+      </AppShell>
+    );
+  }
+
   const channels = buildSlackChannels();
   const activity = buildCompanyEvents().filter((e) => e.source === "slack");
 
@@ -26,8 +59,7 @@ export default async function SlackPage({
           Slack
         </h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          Channel activity signals — not a Slack replacement. Privy does not
-          claim to understand every message.
+          Sample data — channel activity signals for the demo.
         </p>
       </div>
 

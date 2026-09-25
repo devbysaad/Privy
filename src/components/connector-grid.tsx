@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { CONNECTOR_CATALOG, type ConnectorId } from "@/lib/connectors";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  CONNECTOR_CATALOG,
+  connectorConnectable,
+  type ConnectorId,
+} from "@/lib/connectors";
 import { ConnectorLogo } from "@/components/connector-logo";
 import {
   FastnConnectPanel,
-  FASTN_RETURN_KEY,
-  goToFastnHub,
+  openFastnOAuth,
 } from "@/components/fastn-connect-panel";
 import {
   isConnected,
@@ -17,7 +20,16 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Check, Search } from "lucide-react";
 
-function StatusBadge({ row }: { row: ConnectionRow | undefined }) {
+const POLL_MS = 2000;
+const POLL_TIMEOUT_MS = 3 * 60 * 1000;
+
+function StatusBadge({
+  row,
+  connectable,
+}: {
+  row: ConnectionRow | undefined;
+  connectable: boolean;
+}) {
   if (isConnected(row)) {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-teal-soft px-2 py-0.5 text-[10px] font-semibold tracking-wide text-teal uppercase">
@@ -25,31 +37,14 @@ function StatusBadge({ row }: { row: ConnectionRow | undefined }) {
       </span>
     );
   }
+  if (!connectable) {
+    return (
+      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
+        Unavailable
+      </span>
+    );
+  }
   return null;
-}
-
-function readReturnMarker(): ConnectorId | null {
-  try {
-    const id = sessionStorage.getItem(FASTN_RETURN_KEY);
-    if (!id) return null;
-    if (!CONNECTOR_CATALOG.some((c) => c.id === id)) return null;
-    return id as ConnectorId;
-  } catch {
-    return null;
-  }
-}
-
-function clearReturnMarker() {
-  try {
-    sessionStorage.removeItem(FASTN_RETURN_KEY);
-  } catch {
-    /* ignore */
-  }
-}
-
-function isReturnQuery(): boolean {
-  if (typeof window === "undefined") return false;
-  return new URLSearchParams(window.location.search).get("fastn") === "return";
 }
 
 export function ConnectorGrid({
@@ -57,10 +52,8 @@ export function ConnectorGrid({
   compact,
   onChange,
 }: {
-  /** When true, only show scan-ready connectors */
   filterScanReady?: boolean;
   compact?: boolean;
-  /** Reports verified connector ids so pages can gate on real state. */
   onChange?: (connectedIds: ConnectorId[]) => void;
 }) {
   const { rows, verifying, error, refresh } = useConnections();
@@ -69,45 +62,71 @@ export function ConnectorGrid({
   const [activeId, setActiveId] = useState<ConnectorId | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
+  const [polling, setPolling] = useState(false);
+  const popupRef = useRef<Window | null>(null);
+  const pollStarted = useRef(0);
 
-  const handleReturn = useCallback(() => {
-    const marked = readReturnMarker();
-    const fromQuery = isReturnQuery();
-    if (!marked && !fromQuery) return;
-    if (marked) setActiveId(marked);
-    clearReturnMarker();
-    void refresh(true);
-  }, [refresh]);
-
-  // Full reload / fresh mount with ?fastn=return
-  useEffect(() => {
-    handleReturn();
-  }, [handleReturn]);
-
-  // Back from Fastn often restores via bfcache — mount effects do not re-run.
-  useEffect(() => {
-    function onPageShow(e: PageTransitionEvent) {
-      if (e.persisted || isReturnQuery() || readReturnMarker()) {
-        handleReturn();
-      }
-    }
-    window.addEventListener("pageshow", onPageShow);
-    return () => window.removeEventListener("pageshow", onPageShow);
-  }, [handleReturn]);
+  const recheck = useCallback(() => void refresh(true), [refresh]);
 
   const startConnect = useCallback(
     async (id: ConnectorId) => {
+      if (!connectorConnectable(id)) return;
       setActiveId(id);
       setOpenError(null);
       setLeaving(true);
-      const err = await goToFastnHub(id);
+      setPolling(false);
+      const { popup, error: err } = await openFastnOAuth(id);
       setLeaving(false);
-      if (err) setOpenError(err);
+      if (err) {
+        setOpenError(err);
+        popupRef.current = null;
+        return;
+      }
+      popupRef.current = popup;
+      pollStarted.current = Date.now();
+      setPolling(true);
     },
     [],
   );
 
-  const recheck = useCallback(() => void refresh(true), [refresh]);
+  // Keep verifying until Fastn reports ACTIVE — do not stop when the popup closes.
+  useEffect(() => {
+    if (!polling || !activeId || openError) return;
+
+    void refresh(true);
+    const timer = setInterval(() => {
+      if (Date.now() - pollStarted.current > POLL_TIMEOUT_MS) {
+        setPolling(false);
+        return;
+      }
+      void refresh(true);
+    }, POLL_MS);
+
+    function onFocus() {
+      void refresh(true);
+    }
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [polling, activeId, openError, refresh]);
+
+  // Close popup + stop polling once the active connector is verified.
+  useEffect(() => {
+    if (!activeId) return;
+    if (!isConnected(rows[activeId])) return;
+    setPolling(false);
+    try {
+      popupRef.current?.close();
+    } catch {
+      /* ignore */
+    }
+    popupRef.current = null;
+  }, [activeId, rows]);
 
   const verifiedIds = useMemo(
     () =>
@@ -145,12 +164,18 @@ export function ConnectorGrid({
           connectorId={activeId}
           connected={isConnected(rows[activeId])}
           openError={openError}
-          verifying={verifying || leaving}
+          verifying={verifying || leaving || polling}
           onRecheck={recheck}
           onReopen={() => void startConnect(activeId)}
           onClose={() => {
             setActiveId(null);
             setOpenError(null);
+            try {
+              popupRef.current?.close();
+            } catch {
+              /* ignore */
+            }
+            popupRef.current = null;
           }}
         />
       ) : null}
@@ -210,6 +235,7 @@ export function ConnectorGrid({
           {items.map((c) => {
             const row = rows[c.id];
             const on = isConnected(row);
+            const connectable = connectorConnectable(c.id);
             return (
               <li
                 key={c.id}
@@ -230,11 +256,17 @@ export function ConnectorGrid({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-medium text-ink">{c.name}</p>
-                      <StatusBadge row={row} />
+                      <StatusBadge row={row} connectable={connectable} />
                     </div>
                     <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                       {c.blurb}
                     </p>
+                    {on && row?.verifiedAt ? (
+                      <p className="mt-1 text-[11px] text-teal">
+                        Live via Fastn · verified{" "}
+                        {new Date(row.verifiedAt).toLocaleString()}
+                      </p>
+                    ) : null}
                     {row?.lastError && !on ? (
                       <p className="mt-1 text-[11px] text-amber-800">
                         {row.lastError}
@@ -248,14 +280,16 @@ export function ConnectorGrid({
                     size="sm"
                     variant={on ? "outline" : "default"}
                     className="h-9 w-full"
-                    disabled={leaving}
+                    disabled={leaving || !connectable}
                     onClick={() => void startConnect(c.id)}
                   >
-                    {leaving && activeId === c.id
-                      ? "Opening Fastn…"
-                      : on
-                        ? "Manage in Fastn"
-                        : "Connect"}
+                    {!connectable
+                      ? "Unavailable"
+                      : leaving && activeId === c.id
+                        ? "Opening…"
+                        : on
+                          ? "Reconnect"
+                          : "Connect"}
                   </Button>
                 </div>
               </li>

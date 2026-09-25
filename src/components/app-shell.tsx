@@ -16,7 +16,7 @@ const NAV: NavItem[] = [
   { label: "Jira", href: "/dashboard/jira", logo: "jira" },
   { label: "Slack", href: "/dashboard/slack", logo: "slack" },
   { label: "Findings", href: "/dashboard/findings" },
-  { label: "Tasks", href: "/dashboard/tasks" },
+  { label: "Work", href: "/dashboard/tasks" },
 ];
 
 export function AppShell({

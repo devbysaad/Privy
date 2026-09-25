@@ -1,6 +1,11 @@
 import { AppShell } from "@/components/app-shell";
+import {
+  LiveConnectionCard,
+  NotConnectedCard,
+} from "@/components/live-connection-card";
 import { buildJiraIssues } from "@/lib/fixtures/company-story";
 import { formatWhen } from "@/lib/labels";
+import { getLiveConnection } from "@/lib/live-connection";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +16,34 @@ export default async function JiraPage({
 }) {
   const sp = await searchParams;
   const demo = sp.demo === "1";
+  const live = demo ? null : await getLiveConnection("jira");
+  const q = demo ? "?demo=1" : "";
+
+  if (!demo) {
+    return (
+      <AppShell demo={false}>
+        <div className="mb-8">
+          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Work · Jira
+          </p>
+          <h1 className="font-heading mt-1 text-2xl font-semibold text-ink">
+            Jira
+          </h1>
+        </div>
+        {live ? (
+          <LiveConnectionCard
+            appName="Jira"
+            verifiedAt={live.verifiedAt!}
+            externalId={live.externalId}
+            connectHref={`/connections${q}`}
+          />
+        ) : (
+          <NotConnectedCard appName="Jira" connectHref={`/connections${q}`} />
+        )}
+      </AppShell>
+    );
+  }
+
   const issues = buildJiraIssues();
   const open = issues.filter((i) => i.status !== "Done");
   const critical = issues.filter((i) => i.priority === "critical");
@@ -28,7 +61,7 @@ export default async function JiraPage({
           Jira
         </h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          {open.length} open issues · {critical.length} critical ·{" "}
+          Sample data · {open.length} open · {critical.length} critical ·{" "}
           {inProgress.length} in progress
         </p>
       </div>

@@ -4,48 +4,55 @@ import { Button } from "@/components/ui/button";
 import { CONNECTOR_CATALOG, type ConnectorId } from "@/lib/connectors";
 import { Check, ExternalLink, X } from "lucide-react";
 
-export const FASTN_RETURN_KEY = "fastn:return";
-
 /**
- * Same-tab handoff to the Fastn Integration Hub.
- * Stamps the current URL with ?fastn=return so Back lands here, then navigates.
+ * Open Fastn-brokered OAuth in a popup. Returns the window (or null if blocked)
+ * plus an error string when the authorize URL could not be minted.
  */
-export async function goToFastnHub(
-  connectorId: ConnectorId,
-): Promise<string | null> {
+export async function openFastnOAuth(connectorId: ConnectorId): Promise<{
+  popup: Window | null;
+  error: string | null;
+}> {
   try {
-    const res = await fetch("/api/fastn/embed-token");
+    const res = await fetch("/api/fastn/connect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ connectorId }),
+    });
     const data = (await res.json()) as {
-      iframeUrl?: string;
+      authorizationUrl?: string;
       error?: string;
       missing?: string[];
     };
-    if (!res.ok || !data.iframeUrl) {
+    if (!res.ok || !data.authorizationUrl) {
       const missing = data.missing?.length
         ? ` Missing: ${data.missing.join(", ")}.`
         : "";
-      return `${data.error ?? `Fastn link failed (${res.status})`}${missing}`;
+      return {
+        popup: null,
+        error: `${data.error ?? `Connect failed (${res.status})`}${missing}`,
+      };
     }
-
-    try {
-      sessionStorage.setItem(FASTN_RETURN_KEY, connectorId);
-    } catch {
-      /* ignore */
+    const popup = window.open(
+      data.authorizationUrl,
+      "fastn-oauth",
+      "width=600,height=760,menubar=no,toolbar=no",
+    );
+    if (!popup) {
+      return {
+        popup: null,
+        error: "Popup blocked — allow popups for Privy, then try again.",
+      };
     }
-
-    const next = new URL(window.location.href);
-    next.searchParams.set("fastn", "return");
-    window.history.replaceState({}, "", next.toString());
-    window.location.assign(data.iframeUrl);
-    return null;
+    return { popup, error: null };
   } catch (e) {
-    return e instanceof Error ? e.message : "Could not reach Fastn";
+    return {
+      popup: null,
+      error: e instanceof Error ? e.message : "Could not reach Fastn",
+    };
   }
 }
 
-/**
- * Banner shown after returning from Fastn (Back button or ?fastn=return).
- */
+/** Banner while OAuth popup is open / after return. */
 export function FastnConnectPanel({
   connectorId,
   connected,
@@ -74,17 +81,17 @@ export function FastnConnectPanel({
             {connected
               ? `${name} is connected`
               : openError
-                ? `Couldn’t open Fastn`
+                ? `Couldn’t start ${name}`
                 : verifying
-                  ? `Back from Fastn — checking…`
-                  : `Connect ${name} on Fastn`}
+                  ? `Waiting for ${name}…`
+                  : `Connect ${name}`}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             {connected
               ? "Fastn confirmed it. You can close this."
               : openError
                 ? "Fix the error below, then try again."
-                : "Authorize on Fastn, then press Back — Privy verifies automatically."}
+                : "Authorize in the popup. This page updates automatically when Fastn reports ACTIVE — no need to hit Check now."}
           </p>
         </div>
         <Button
@@ -111,7 +118,7 @@ export function FastnConnectPanel({
         ) : (
           <>
             <Button size="sm" onClick={onReopen}>
-              <ExternalLink className="h-4 w-4" /> Open Fastn
+              <ExternalLink className="h-4 w-4" /> Open again
             </Button>
             <Button
               size="sm"

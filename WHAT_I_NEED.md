@@ -33,16 +33,27 @@ Without either, the app uses template explanations.
 
 ---
 
-## In-app Fastn connect (Connections / onboarding)
+## CEO work requests (optional email)
 
-Connect leaves Privy **same-tab** for the Fastn Integration Hub (minted `emb_` URL). Authorize there, then press **Back** — Privy restores with `?fastn=return` and verifies against Fastn.
+On **Work** (`/dashboard/tasks`), the CEO assigns an employee a request. They get a magic link to mark it **solved**.
 
 | Variable | Why |
 |----------|-----|
-| `FASTN_API_KEY` | Mint short-lived `emb_` tokens + read connections (server only) |
-| `FASTN_END_ORG_ID` | Optional. Tenant for the widget; `FASTN_SPACE_ID` is used when unset |
+| `RESEND_API_KEY` | Real email via Resend (omit = demo: show/share the solve link) |
+| `RESEND_FROM` | Optional From header |
+| `NEXT_PUBLIC_APP_URL` | Absolute URL in the email (defaults to request origin) |
 
-"Connected" is never assumed. `GET /api/fastn/connections` reads `GET /api/v1/connections` from Fastn and only an `ACTIVE` row marks a connector verified. If the mint or the read fails, the UI shows the real error instead of a fake success.
+---
+
+## Fastn connect (Connections / onboarding)
+
+Connect opens the **provider’s OAuth consent** via Fastn (`POST /api/v1/oauth/initiate`) in a popup. Privy polls `GET /api/v1/connections` until the app is `ACTIVE`, then shows Verified.
+
+| Variable | Why |
+|----------|-----|
+| `FASTN_API_KEY` | OAuth initiate + read connections (server only) |
+
+The Integration Hub embed is unused — it only lists widgets published in Fastn’s Widget Builder, and this space has none. Do not set `FASTN_END_ORG_ID` for connect.
 
 ---
 

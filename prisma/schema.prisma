@@ -84,18 +84,25 @@ model Finding {
 }
 
 model Task {
-  id                 String   @id @default(cuid())
-  orgId              String   @default("default")
+  id                 String    @id @default(cuid())
+  orgId              String    @default("default")
   title              String
   description        String?
-  status             String   @default("open") // open | done | cancelled
-  priority           String   @default("medium") // high | medium | low
+  status             String    @default("open") // open | done | cancelled
+  priority           String    @default("medium") // high | medium | low
   relatedFindingId   String?
   relatedIdentityId  String?
   relatedEventId     String?
   relatedResourceId  String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  /** CEO → employee work request (PR-style) */
+  assigneeName       String?
+  assigneeEmail      String?
+  message            String?
+  solveToken         String?   @unique
+  emailSentAt        DateTime?
+  solvedAt           DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@index([orgId])
   @@index([status])

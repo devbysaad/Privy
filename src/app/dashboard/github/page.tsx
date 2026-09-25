@@ -1,9 +1,14 @@
 import { AppShell } from "@/components/app-shell";
 import {
+  LiveConnectionCard,
+  NotConnectedCard,
+} from "@/components/live-connection-card";
+import {
   buildGithubPrs,
   buildGithubRepos,
 } from "@/lib/fixtures/company-story";
 import { formatWhen } from "@/lib/labels";
+import { getLiveConnection } from "@/lib/live-connection";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +19,37 @@ export default async function GithubPage({
 }) {
   const sp = await searchParams;
   const demo = sp.demo === "1";
+  const live = demo ? null : await getLiveConnection("github");
+  const q = demo ? "?demo=1" : "";
+
+  if (!demo) {
+    return (
+      <AppShell demo={false}>
+        <div className="mb-8">
+          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Work · GitHub
+          </p>
+          <h1 className="font-heading mt-1 text-2xl font-semibold text-ink">
+            GitHub
+          </h1>
+        </div>
+        {live ? (
+          <LiveConnectionCard
+            appName="GitHub"
+            verifiedAt={live.verifiedAt!}
+            externalId={live.externalId}
+            connectHref={`/connections${q}`}
+          />
+        ) : (
+          <NotConnectedCard
+            appName="GitHub"
+            connectHref={`/connections${q}`}
+          />
+        )}
+      </AppShell>
+    );
+  }
+
   const repos = buildGithubRepos();
   const prs = buildGithubPrs();
   const openPrs = prs.filter((p) => p.status === "open");
@@ -28,7 +64,8 @@ export default async function GithubPage({
           GitHub
         </h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          {repos.length} repositories · {openPrs.length} active pull requests
+          Sample data · {repos.length} repositories · {openPrs.length} active
+          pull requests
         </p>
       </div>
 
@@ -52,11 +89,6 @@ export default async function GithubPage({
                 Open PRs: {r.openPrs} · Contributors: {r.contributors}
               </p>
               <p className="mt-1 text-sm text-ink">Recent: {r.recent}</p>
-              {r.findingCount > 0 ? (
-                <p className="mt-2 text-xs text-amber-900">
-                  Risk: {r.findingCount} finding(s) in access scan
-                </p>
-              ) : null}
             </li>
           ))}
         </ul>

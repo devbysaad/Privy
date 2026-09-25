@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import {
   fastnSlugFor,
   matchFastnConnections,
+  pickDefaultAuthProvider,
 } from "../src/lib/fastn/embed";
-import { CONNECTOR_CATALOG } from "../src/lib/connectors";
+import {
+  CONNECTOR_CATALOG,
+  connectorConnectable,
+} from "../src/lib/connectors";
 
 const catalogIds = CONNECTOR_CATALOG.map((c) => c.id);
 
@@ -15,7 +19,6 @@ const slugByUuid = new Map([
   [DRIVE_UUID, "googleDrive"],
 ]);
 
-// Catalog ids whose Fastn slug differs must be aliased, or they never verify.
 assert.equal(fastnSlugFor("drive"), "googleDrive");
 assert.equal(fastnSlugFor("github"), "github");
 
@@ -38,7 +41,6 @@ assert.equal(
   "ucl:github",
 );
 
-// Prefer connector.slug even when the UUID map is empty.
 const fromSlug = matchFastnConnections(
   [
     {
@@ -56,9 +58,38 @@ assert.deepEqual(
   ["slack"],
 );
 
-// Nothing is connected when Fastn reports nothing.
 assert.deepEqual(matchFastnConnections([], slugByUuid, catalogIds), []);
 
+// slug → uuid resolution (pure map, mirrors loadCatalog bySlug)
+const bySlug = new Map([
+  ["github", GITHUB_UUID],
+  ["googledrive", DRIVE_UUID],
+]);
+function resolveSlug(id: string) {
+  const slug = fastnSlugFor(id).toLowerCase().replace(/[^a-z0-9]/g, "");
+  return bySlug.get(slug) ?? null;
+}
+assert.equal(resolveSlug("github"), GITHUB_UUID);
+assert.equal(resolveSlug("drive"), DRIVE_UUID);
+assert.equal(resolveSlug("okta"), null);
+
+// Default auth provider pick
+const picked = pickDefaultAuthProvider([
+  { id: "a", authType: "api_key", isDefault: true },
+  { id: "b", authType: "oauth2", isDefault: false },
+  { id: "c", authType: "oauth2", isDefault: true },
+]);
+assert.equal(picked?.id, "c");
+assert.equal(pickDefaultAuthProvider([])?.id, undefined);
+assert.equal(
+  pickDefaultAuthProvider([{ id: "only", authType: "oauth" }])?.id,
+  "only",
+);
+
+assert.equal(connectorConnectable("jira"), true);
+assert.equal(connectorConnectable("okta"), false);
+assert.equal(connectorConnectable("linear"), false);
+
 console.log(
-  "connections ok: ACTIVE + slug (inline or catalog) verify; drive→googleDrive aliased",
+  "connections ok: ACTIVE+slug verify, oauth provider pick, connectable set",
 );

@@ -307,10 +307,10 @@ function ConnectStep({
     <div className="space-y-5">
       <StepHeading
         title="Connect your stack"
-        subtitle={`Authorize apps through the Fastn hub without leaving Privy. Live scans use GitHub, Drive, and Slack (${scanReadyCount} scan-ready) — ${catalogCount} apps in the catalog.`}
+        subtitle={`Connect apps via Fastn OAuth (popup). Live scans use GitHub, Drive, and Slack (${scanReadyCount} scan-ready) — ${catalogCount} apps in the catalog.`}
       />
       <p className="text-xs text-muted-foreground">
-        Only connections Fastn confirms are marked verified
+        Only connections Fastn confirms as ACTIVE are marked verified
       </p>
       <ConnectorGrid onChange={onConnectedChange} compact />
       <ErrorText error={error} />

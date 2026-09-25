@@ -1,8 +1,8 @@
 /**
- * Fastn embedded widget + connection truth.
- * - POST /api/v1/embed/token  → short-lived emb_ token for the in-app iframe
- * - GET  /api/v1/connections  → which connectors this tenant actually has
- * - GET  /api/v1/connectors   → catalog, used to map Fastn UUIDs to our ids
+ * Fastn connection truth + OAuth initiate.
+ * - POST /api/v1/oauth/initiate → provider authorize URL
+ * - GET  /api/v1/connections    → which connectors are ACTIVE
+ * - GET  /api/v1/connectors     → catalog (uuid ↔ slug)
  */
 
 export function fastnEmbedHost(): string {
@@ -12,21 +12,8 @@ export function fastnEmbedHost(): string {
   );
 }
 
-/**
- * Tenant the widget and connections belong to. FASTN_END_ORG_ID (customer UUID)
- * wins; the space/project id is a verified-working fallback for a personal org.
- */
-export function fastnEndOrgId(): string | null {
-  return (
-    process.env.FASTN_END_ORG_ID?.trim() ||
-    process.env.FASTN_SPACE_ID?.trim() ||
-    process.env.FASTN_PROJECT_ID?.trim() ||
-    null
-  );
-}
-
 export function fastnEmbedConfigured(): boolean {
-  return Boolean(process.env.FASTN_API_KEY?.trim() && fastnEndOrgId());
+  return Boolean(process.env.FASTN_API_KEY?.trim());
 }
 
 function fastnHeaders(): Record<string, string> {
@@ -40,89 +27,6 @@ function fastnHeaders(): Record<string, string> {
     headers["x-org-id"] = process.env.FASTN_ORG_ID.trim();
   }
   return headers;
-}
-
-export type MintEmbedResult =
-  | {
-      ok: true;
-      token: string;
-      iframeUrl: string;
-      expiresIn: number;
-      endOrgId: string;
-    }
-  | { ok: false; missing?: string[]; message: string };
-
-export async function mintEmbedToken(opts: {
-  userEmail: string;
-  userName: string;
-}): Promise<MintEmbedResult> {
-  const key = process.env.FASTN_API_KEY?.trim();
-  const endOrgId = fastnEndOrgId();
-  const missing: string[] = [];
-  if (!key) missing.push("FASTN_API_KEY");
-  if (!endOrgId) missing.push("FASTN_END_ORG_ID");
-  if (missing.length) {
-    return {
-      ok: false,
-      missing,
-      message:
-        "Fastn embed needs FASTN_API_KEY plus a tenant — FASTN_END_ORG_ID (customer UUID) or FASTN_SPACE_ID.",
-    };
-  }
-
-  const host = fastnEmbedHost();
-
-  try {
-    const res = await fetch(`${host}/api/v1/embed/token`, {
-      method: "POST",
-      headers: fastnHeaders(),
-      body: JSON.stringify({
-        endOrgId,
-        userEmail: opts.userEmail,
-        userName: opts.userName,
-      }),
-    });
-    const json = (await res.json().catch(() => ({}))) as {
-      data?: { token?: string; expiresIn?: number };
-      token?: string;
-      expiresIn?: number;
-      message?: string;
-      error?: string;
-    };
-
-    if (!res.ok) {
-      return {
-        ok: false,
-        message:
-          json.message ||
-          json.error ||
-          `Fastn embed token failed (${res.status})`,
-      };
-    }
-
-    const token = json.data?.token ?? json.token;
-    if (!token) {
-      return { ok: false, message: "Fastn embed response missing token" };
-    }
-
-    const expiresIn = json.data?.expiresIn ?? json.expiresIn ?? 900;
-    const iframeUrl = new URL(`${host}/api/v1/embed/iframe`);
-    iframeUrl.searchParams.set("token", token);
-    iframeUrl.searchParams.set("tenant-id", endOrgId!);
-    iframeUrl.searchParams.set("title", "Privy");
-    return {
-      ok: true,
-      token,
-      iframeUrl: iframeUrl.toString(),
-      expiresIn,
-      endOrgId: endOrgId!,
-    };
-  } catch (err) {
-    return {
-      ok: false,
-      message: err instanceof Error ? err.message : "Embed token network error",
-    };
-  }
 }
 
 /** Our catalog id → Fastn connector slug, where they differ. */
@@ -143,27 +47,151 @@ function normalize(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-// ponytail: process-local catalog cache, 10 min TTL. 424 connectors change
-// rarely; upgrade to a shared cache if this ever runs multi-instance.
-let catalogCache: { at: number; byUuid: Map<string, string> } | null = null;
+// ponytail: process-local catalog cache, 10 min TTL.
+let catalogCache: {
+  at: number;
+  byUuid: Map<string, string>;
+  bySlug: Map<string, string>;
+} | null = null;
 const CATALOG_TTL_MS = 10 * 60 * 1000;
 
-/** Fastn connector UUID → slug. */
-async function connectorSlugsByUuid(): Promise<Map<string, string>> {
+async function loadCatalog(): Promise<{
+  byUuid: Map<string, string>;
+  bySlug: Map<string, string>;
+}> {
   if (catalogCache && Date.now() - catalogCache.at < CATALOG_TTL_MS) {
-    return catalogCache.byUuid;
+    return catalogCache;
   }
   const res = await fetch(`${fastnEmbedHost()}/api/v1/connectors`, {
     headers: fastnHeaders(),
   });
   if (!res.ok) throw new Error(`Fastn connectors failed (${res.status})`);
-  const json = (await res.json()) as { data?: Array<{ id?: string; slug?: string }> };
+  const json = (await res.json()) as {
+    data?: Array<{ id?: string; slug?: string }>;
+  };
   const byUuid = new Map<string, string>();
+  const bySlug = new Map<string, string>();
   for (const c of json.data ?? []) {
-    if (c.id && c.slug) byUuid.set(c.id, c.slug);
+    if (!c.id || !c.slug) continue;
+    byUuid.set(c.id, c.slug);
+    bySlug.set(normalize(c.slug), c.id);
   }
-  catalogCache = { at: Date.now(), byUuid };
-  return byUuid;
+  catalogCache = { at: Date.now(), byUuid, bySlug };
+  return catalogCache;
+}
+
+/** Fastn connector UUID → slug. */
+async function connectorSlugsByUuid(): Promise<Map<string, string>> {
+  return (await loadCatalog()).byUuid;
+}
+
+/** Resolve our catalog id to a Fastn connector UUID. */
+export async function resolveConnectorUuid(
+  connectorId: string,
+): Promise<string | null> {
+  const { bySlug } = await loadCatalog();
+  return bySlug.get(normalize(fastnSlugFor(connectorId))) ?? null;
+}
+
+export type AuthProvider = {
+  id?: string;
+  isDefault?: boolean;
+  authType?: string;
+  name?: string;
+};
+
+/** Prefer default OAuth provider; else first oauth-ish entry. */
+export function pickDefaultAuthProvider(
+  providers: readonly AuthProvider[],
+): AuthProvider | null {
+  if (!providers.length) return null;
+  const oauthish = providers.filter((p) =>
+    /oauth/i.test(p.authType ?? p.name ?? ""),
+  );
+  const pool = oauthish.length ? oauthish : providers;
+  return pool.find((p) => p.isDefault) ?? pool[0] ?? null;
+}
+
+export type InitiateOAuthResult =
+  | { ok: true; authorizationUrl: string }
+  | { ok: false; message: string; missing?: string[] };
+
+export async function initiateOAuth(
+  connectorId: string,
+): Promise<InitiateOAuthResult> {
+  if (!fastnEmbedConfigured()) {
+    return {
+      ok: false,
+      missing: ["FASTN_API_KEY"],
+      message: "Fastn not configured — set FASTN_API_KEY.",
+    };
+  }
+
+  try {
+    const uuid = await resolveConnectorUuid(connectorId);
+    if (!uuid) {
+      return {
+        ok: false,
+        message: `No Fastn connector for "${connectorId}".`,
+      };
+    }
+
+    const providersRes = await fetch(
+      `${fastnEmbedHost()}/api/v1/auth-providers?connectorId=${encodeURIComponent(uuid)}`,
+      { headers: fastnHeaders() },
+    );
+    if (!providersRes.ok) {
+      return {
+        ok: false,
+        message: `Fastn auth-providers failed (${providersRes.status})`,
+      };
+    }
+    const providersJson = (await providersRes.json()) as {
+      data?: AuthProvider[];
+    };
+    const provider = pickDefaultAuthProvider(providersJson.data ?? []);
+    if (!provider?.id) {
+      return {
+        ok: false,
+        message: `No OAuth provider for "${connectorId}" in Fastn.`,
+      };
+    }
+
+    const initRes = await fetch(`${fastnEmbedHost()}/api/v1/oauth/initiate`, {
+      method: "POST",
+      headers: fastnHeaders(),
+      body: JSON.stringify({
+        connectorId: uuid,
+        authProviderId: provider.id,
+      }),
+    });
+    const initJson = (await initRes.json().catch(() => ({}))) as {
+      data?: { authorizationUrl?: string };
+      authorizationUrl?: string;
+      message?: string;
+      error?: string;
+    };
+    if (!initRes.ok) {
+      return {
+        ok: false,
+        message:
+          initJson.message ||
+          initJson.error ||
+          `Fastn oauth/initiate failed (${initRes.status})`,
+      };
+    }
+    const authorizationUrl =
+      initJson.data?.authorizationUrl ?? initJson.authorizationUrl;
+    if (!authorizationUrl) {
+      return { ok: false, message: "Fastn oauth/initiate missing authorizationUrl" };
+    }
+    return { ok: true, authorizationUrl };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "OAuth initiate network error",
+    };
+  }
 }
 
 export type LiveConnection = { connectorId: string; externalId: string };
@@ -178,7 +206,6 @@ export type FastnConnectionRow = {
 /**
  * Pure mapping: Fastn connection rows → our catalog ids.
  * Only ACTIVE rows whose connector resolves to a known slug count.
- * Prefers row.connector.slug; falls back to slugByUuid when missing.
  */
 export function matchFastnConnections(
   rows: readonly FastnConnectionRow[],
@@ -191,7 +218,9 @@ export function matchFastnConnections(
   const matched: LiveConnection[] = [];
   for (const row of rows) {
     if (row.status !== "ACTIVE") continue;
-    const slug = row.connector?.slug ?? (row.connectorId ? slugByUuid.get(row.connectorId) : undefined);
+    const slug =
+      row.connector?.slug ??
+      (row.connectorId ? slugByUuid.get(row.connectorId) : undefined);
     if (!slug) continue;
     const catalogId = slugToCatalogId.get(normalize(slug));
     if (!catalogId) continue;
@@ -204,17 +233,13 @@ export type ListConnectionsResult =
   | { ok: true; connections: LiveConnection[] }
   | { ok: false; message: string };
 
-/**
- * Live truth from Fastn: which of our catalog connectors are ACTIVE.
- * `catalogIds` scopes the slug matching to connectors Privy knows about.
- */
 export async function listFastnConnections(
   catalogIds: readonly string[],
 ): Promise<ListConnectionsResult> {
   if (!fastnEmbedConfigured()) {
     return {
       ok: false,
-      message: "Fastn not configured — set FASTN_API_KEY and FASTN_END_ORG_ID.",
+      message: "Fastn not configured — set FASTN_API_KEY.",
     };
   }
 

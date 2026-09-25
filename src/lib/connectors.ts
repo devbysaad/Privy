@@ -48,6 +48,39 @@ export type Connector = {
   scanReady: boolean;
 };
 
+/**
+ * Catalog ids that have a working Fastn OAuth provider today.
+ * Others are API-key-only or missing from Fastn — Connect is disabled.
+ */
+const OAUTH_CONNECTABLE = new Set<ConnectorId>([
+  "github",
+  "drive",
+  "slack",
+  "notion",
+  "jira",
+  "hubspot",
+  "salesforce",
+  "zendesk",
+  "azuread",
+  "teams",
+  "gmail",
+  "dropbox",
+  "confluence",
+  "asana",
+  "figma",
+  "gitlab",
+  "bitbucket",
+  "onedrive",
+  "sharepoint",
+  "zoom",
+  "airtable",
+  "intercom",
+]);
+
+export function connectorConnectable(id: ConnectorId): boolean {
+  return OAUTH_CONNECTABLE.has(id);
+}
+
 export const CONNECTOR_CATALOG: Connector[] = [
   {
     id: "github",
