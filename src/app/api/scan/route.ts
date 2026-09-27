@@ -1,40 +1,41 @@
-import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { z } from "zod";
 import { runScan } from "@/lib/scan/orchestrator";
 import { liveScanReady } from "@/lib/env";
+import { withApi, jsonOk, jsonError, parseJson } from "@/lib/api";
+import { log } from "@/lib/logger";
+import { rateLimit } from "@/lib/rate-limit";
 
-export async function POST(req: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+const Body = z.object({
+  mode: z.enum(["demo", "live"]).optional(),
+});
+
+export const POST = withApi(async (req, { orgId, userId }) => {
+  const rl = rateLimit(`scan:${userId}`, { limit: 10, windowMs: 60_000 });
+  if (!rl.ok) {
+    return jsonError("Too many scans", 429, { retryAfterSec: rl.retryAfterSec });
   }
 
-  const body = (await req.json().catch(() => ({}))) as {
-    mode?: "demo" | "live";
-  };
+  const body = await parseJson(req, Body);
   const mode = body.mode === "live" ? "live" : "demo";
 
   if (mode === "live") {
     const ready = liveScanReady();
     if (!ready.ok) {
-      return NextResponse.json(
-        {
-          error: "Live scan not configured",
-          missing: ready.missing,
-          hint: "Fixture mode is the hackathon default. Set PRIVY_DATA_MODE=live and Fastn keys only after MCP verification — or use mode=demo.",
-        },
-        { status: 400 },
-      );
+      return jsonError("Live scan not configured", 400, {
+        missing: ready.missing,
+        hint: "Set PRIVY_DATA_MODE=live and Fastn keys after MCP verification — or use mode=demo.",
+      });
     }
   }
 
   try {
-    const result = await runScan({ mode });
-    return NextResponse.json(result);
+    const result = await runScan({ mode, orgId });
+    log.info("scan.complete", { orgId, mode, scanId: result.scanId });
+    return jsonOk(result);
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Scan failed" },
-      { status: 500 },
-    );
+    log.error("scan.fail", {
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return jsonError(err instanceof Error ? err.message : "Scan failed", 500);
   }
-}
+});

@@ -18,7 +18,7 @@ export async function remediateFinding(opts: {
   findingId: string;
   intent: RemediationIntent;
   operatorId: string;
-  orgId?: string;
+  orgId: string;
 }): Promise<
   | {
       ok: true;
@@ -29,7 +29,7 @@ export async function remediateFinding(opts: {
     }
   | { ok: false; message: string }
 > {
-  const orgId = opts.orgId ?? "default";
+  const { orgId } = opts;
   const finding = await db.finding.findFirst({
     where: { id: opts.findingId, orgId },
     include: { scan: true },

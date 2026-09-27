@@ -35,8 +35,8 @@ async function main() {
   });
   assert.ok(t.counterpoint.length > 10, "counterpoint required");
 
-  // 3) Persist demo scan
-  const scan = await runScan({ mode: "demo" });
+  // 3) Persist demo scan (scripts use fixture org)
+  const scan = await runScan({ mode: "demo", orgId: "default" });
   assert.equal(scan.status, "complete");
   assert.ok(scan.findingCount >= 8);
 
@@ -55,6 +55,7 @@ async function main() {
     findingId: remediable!.id,
     intent: "remove_github_collaborator",
     operatorId: "rehearse-operator",
+    orgId: "default",
   });
   assert.equal(result.ok, true);
   if (result.ok) {
@@ -67,6 +68,7 @@ async function main() {
     findingId: remediable!.id,
     intent: "remove_github_collaborator",
     operatorId: "rehearse-operator",
+    orgId: "default",
   });
   assert.equal(again.ok, true);
 

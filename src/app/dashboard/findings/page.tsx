@@ -10,6 +10,8 @@ import {
 } from "@/lib/labels";
 import { getLatestScan, getScan, runScan } from "@/lib/scan/orchestrator";
 import type { FindingEvidence, Graph, PlatformCoverage } from "@/types";
+import { requireTenant } from "@/lib/tenant";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -21,13 +23,20 @@ export default async function FindingsPage({
 }) {
   const sp = await searchParams;
   const demo = sp.demo === "1";
+  let orgId: string;
+  try {
+    ({ orgId } = await requireTenant());
+  } catch {
+    redirect("/sign-in");
+  }
+
   let scan = sp.scan
-    ? await getScan(sp.scan)
-    : await getLatestScan("default", demo);
+    ? await getScan(sp.scan, orgId)
+    : await getLatestScan(orgId, demo);
 
   if (!scan && demo) {
-    const seeded = await runScan({ mode: "demo" });
-    scan = await getScan(seeded.scanId);
+    const seeded = await runScan({ mode: "demo", orgId });
+    scan = await getScan(seeded.scanId, orgId);
   }
 
   const rank = { critical: 0, high: 1, medium: 2 } as const;

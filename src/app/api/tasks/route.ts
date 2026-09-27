@@ -1,48 +1,44 @@
-import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { z } from "zod";
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { sendWorkAssignmentEmail } from "@/lib/mail";
 import { companyRoster } from "@/lib/roster";
+import { withApi, jsonOk, jsonError, parseJson } from "@/lib/api";
+import { rateLimit } from "@/lib/rate-limit";
 
-export async function GET() {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const GET = withApi(async (_req, { orgId }) => {
   const tasks = await db.task.findMany({
-    where: { orgId: "default" },
+    where: { orgId },
     orderBy: { createdAt: "desc" },
     take: 50,
   });
-  return NextResponse.json({ tasks });
-}
+  return jsonOk({ tasks });
+});
 
-export async function POST(req: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+const PostBody = z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().max(4000).optional(),
+  priority: z.enum(["high", "medium", "low"]).optional(),
+  message: z.string().max(4000).optional(),
+  assigneeId: z.string().optional(),
+  assigneeEmail: z.string().email().optional(),
+  assigneeName: z.string().optional(),
+  relatedFindingId: z.string().optional(),
+  relatedIdentityId: z.string().optional(),
+  relatedEventId: z.string().optional(),
+  relatedResourceId: z.string().optional(),
+  workRequest: z.boolean().optional(),
+});
+
+export const POST = withApi(async (req, { orgId, userId }) => {
+  const rl = rateLimit(`tasks:${userId}`, { limit: 40, windowMs: 60_000 });
+  if (!rl.ok) {
+    return jsonError("Too many requests", 429, {
+      retryAfterSec: rl.retryAfterSec,
+    });
   }
 
-  const body = (await req.json().catch(() => ({}))) as {
-    title?: string;
-    description?: string;
-    priority?: string;
-    message?: string;
-    assigneeId?: string;
-    assigneeEmail?: string;
-    assigneeName?: string;
-    relatedFindingId?: string;
-    relatedIdentityId?: string;
-    relatedEventId?: string;
-    relatedResourceId?: string;
-    /** CEO work request: assign + email employee */
-    workRequest?: boolean;
-  };
-
-  if (!body.title?.trim()) {
-    return NextResponse.json({ error: "title required" }, { status: 400 });
-  }
+  const body = await parseJson(req, PostBody);
 
   let assigneeName = body.assigneeName?.trim() || null;
   let assigneeEmail = body.assigneeEmail?.trim().toLowerCase() || null;
@@ -62,10 +58,7 @@ export async function POST(req: Request) {
       assigneeEmail = person.email;
     }
     if (!assigneeEmail || !assigneeName) {
-      return NextResponse.json(
-        { error: "Pick an employee to assign" },
-        { status: 400 },
-      );
+      return jsonError("Pick an employee to assign", 400);
     }
   }
 
@@ -80,13 +73,10 @@ export async function POST(req: Request) {
 
   const task = await db.task.create({
     data: {
-      orgId: "default",
+      orgId,
       title: body.title.trim(),
       description: body.description?.trim() || message || null,
-      priority:
-        body.priority === "high" || body.priority === "low"
-          ? body.priority
-          : "medium",
+      priority: body.priority ?? "medium",
       status: "open",
       relatedFindingId: body.relatedFindingId || null,
       relatedIdentityId: body.relatedIdentityId || null,
@@ -117,9 +107,5 @@ export async function POST(req: Request) {
   }
 
   const fresh = await db.task.findUnique({ where: { id: task.id } });
-  return NextResponse.json({
-    task: fresh,
-    solveUrl,
-    mail,
-  });
-}
+  return jsonOk({ task: fresh, solveUrl, mail }, { status: 201 });
+});

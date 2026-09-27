@@ -10,6 +10,8 @@ import {
 import { formatClock } from "@/lib/labels";
 import { getLatestScan, getScan, runScan } from "@/lib/scan/orchestrator";
 import type { Graph } from "@/types";
+import { requireTenant } from "@/lib/tenant";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -20,13 +22,20 @@ export default async function DashboardPage({
 }) {
   const sp = await searchParams;
   const demo = sp.demo === "1";
+  let orgId: string;
+  try {
+    ({ orgId } = await requireTenant());
+  } catch {
+    redirect("/sign-in");
+  }
+
   let scan = sp.scan
-    ? await getScan(sp.scan)
-    : await getLatestScan("default", demo);
+    ? await getScan(sp.scan, orgId)
+    : await getLatestScan(orgId, demo);
 
   if (!scan && demo) {
-    const seeded = await runScan({ mode: "demo" });
-    scan = await getScan(seeded.scanId);
+    const seeded = await runScan({ mode: "demo", orgId });
+    scan = await getScan(seeded.scanId, orgId);
   }
 
   const findings = scan?.findings ?? [];

@@ -5,6 +5,8 @@ import { buildCompanyEvents } from "@/lib/fixtures/company-story";
 import { eventsByDay, findRelatedEvents } from "@/lib/intelligence/related";
 import { formatClock } from "@/lib/labels";
 import { getLatestScan, runScan, getScan } from "@/lib/scan/orchestrator";
+import { requireTenant } from "@/lib/tenant";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +18,17 @@ export default async function ActivityPage({
   const sp = await searchParams;
   const demo = sp.demo === "1";
   const q = demo ? "?demo=1" : "";
+  let orgId: string;
+  try {
+    ({ orgId } = await requireTenant());
+  } catch {
+    redirect("/sign-in");
+  }
 
-  let scan = await getLatestScan("default", demo);
+  let scan = await getLatestScan(orgId, demo);
   if (!scan && demo) {
-    const seeded = await runScan({ mode: "demo", orgId: "default" });
-    scan = await getScan(seeded.scanId);
+    const seeded = await runScan({ mode: "demo", orgId });
+    scan = await getScan(seeded.scanId, orgId);
   }
   const findings = (scan?.findings ?? []).map((f) => ({
     id: f.id,

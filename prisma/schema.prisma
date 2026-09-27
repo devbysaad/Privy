@@ -49,6 +49,9 @@ model Scan {
   updatedAt        DateTime   @updatedAt
 
   findings Finding[]
+
+  @@index([orgId])
+  @@index([createdAt])
 }
 
 model Finding {

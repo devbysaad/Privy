@@ -1,28 +1,36 @@
-import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { z } from "zod";
 import { CONNECTOR_CATALOG } from "@/lib/connectors";
 import { initiateOAuth } from "@/lib/fastn/embed";
+import { withApi, jsonOk, jsonError, parseJson } from "@/lib/api";
+import { rateLimit } from "@/lib/rate-limit";
+import { log } from "@/lib/logger";
+
+const Body = z.object({
+  connectorId: z.string().min(1),
+});
 
 /** Start Fastn-brokered OAuth for a catalog connector. */
-export async function POST(req: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export const POST = withApi(async (req, { userId }) => {
+  const rl = rateLimit(`oauth:${userId}`, { limit: 20, windowMs: 60_000 });
+  if (!rl.ok) {
+    return jsonError("Too many connect attempts", 429, {
+      retryAfterSec: rl.retryAfterSec,
+    });
   }
 
-  const body = (await req.json().catch(() => ({}))) as { connectorId?: string };
-  const connectorId = body.connectorId?.trim();
-  if (!connectorId || !CONNECTOR_CATALOG.some((c) => c.id === connectorId)) {
-    return NextResponse.json({ error: "Unknown connectorId" }, { status: 400 });
+  const body = await parseJson(req, Body);
+  if (!CONNECTOR_CATALOG.some((c) => c.id === body.connectorId)) {
+    return jsonError("Unknown connectorId", 400);
   }
 
-  const result = await initiateOAuth(connectorId);
+  const result = await initiateOAuth(body.connectorId);
   if (!result.ok) {
-    return NextResponse.json(
-      { error: result.message, missing: result.missing },
-      { status: 400 },
-    );
+    log.warn("fastn.oauth.fail", {
+      connectorId: body.connectorId,
+      message: result.message,
+    });
+    return jsonError(result.message, 400, { missing: result.missing });
   }
 
-  return NextResponse.json({ authorizationUrl: result.authorizationUrl });
-}
+  return jsonOk({ authorizationUrl: result.authorizationUrl });
+});

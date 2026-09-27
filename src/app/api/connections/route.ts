@@ -1,51 +1,43 @@
-import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { CONNECTOR_CATALOG } from "@/lib/connectors";
+import { withApi, jsonOk, jsonError, parseJson } from "@/lib/api";
 
-const ORG_ID = "default";
-
-/** Current connection state for the workspace (DB only — no Fastn call). */
-export async function GET() {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+/** Current connection state for this tenant (DB only — no Fastn call). */
+export const GET = withApi(async (_req, { orgId }) => {
   const connections = await db.connection.findMany({
-    where: { orgId: ORG_ID },
+    where: { orgId },
     orderBy: { updatedAt: "desc" },
   });
-  return NextResponse.json({ connections });
-}
+  return jsonOk({ connections });
+});
 
-/** Mark a connector as pending — the user opened the Fastn widget for it. */
-export async function POST(req: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+const PostBody = z.object({
+  connectorId: z.string().min(1),
+});
 
-  const body = (await req.json().catch(() => ({}))) as { connectorId?: string };
-  const connectorId = body.connectorId?.trim();
-  if (!connectorId || !CONNECTOR_CATALOG.some((c) => c.id === connectorId)) {
-    return NextResponse.json(
-      { error: "Unknown connectorId" },
-      { status: 400 },
-    );
+/** Mark a connector as pending — user started OAuth for it. */
+export const POST = withApi(async (req, { orgId }) => {
+  const body = await parseJson(req, PostBody);
+  if (!CONNECTOR_CATALOG.some((c) => c.id === body.connectorId)) {
+    return jsonError("Unknown connectorId", 400);
   }
 
   const existing = await db.connection.findUnique({
-    where: { orgId_connectorId: { orgId: ORG_ID, connectorId } },
+    where: {
+      orgId_connectorId: { orgId, connectorId: body.connectorId },
+    },
   });
-  // Never downgrade a verified connection back to pending.
   if (existing?.status === "connected") {
-    return NextResponse.json({ connection: existing });
+    return jsonOk({ connection: existing });
   }
 
   const connection = await db.connection.upsert({
-    where: { orgId_connectorId: { orgId: ORG_ID, connectorId } },
-    create: { orgId: ORG_ID, connectorId, status: "pending" },
+    where: {
+      orgId_connectorId: { orgId, connectorId: body.connectorId },
+    },
+    create: { orgId, connectorId: body.connectorId, status: "pending" },
     update: { status: "pending", lastError: null },
   });
-  return NextResponse.json({ connection });
-}
+  return jsonOk({ connection });
+});

@@ -7,6 +7,8 @@ import { formatWhen, platformLabel, ruleLabel } from "@/lib/labels";
 import { getScan } from "@/lib/scan/orchestrator";
 import { db } from "@/lib/db";
 import type { Graph } from "@/types";
+import { requireTenant } from "@/lib/tenant";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -22,13 +24,20 @@ export default async function IdentityPage({
   const demo = sp.demo === "1";
   const identityId = decodeURIComponent(id);
 
-  let scan = sp.scan ? await getScan(sp.scan) : null;
+  let orgId: string;
+  try {
+    ({ orgId } = await requireTenant());
+  } catch {
+    redirect("/sign-in");
+  }
+
+  let scan = sp.scan ? await getScan(sp.scan, orgId) : null;
   if (!scan) {
     const finding = await db.finding.findFirst({
-      where: { identityId },
+      where: { identityId, orgId },
       orderBy: { createdAt: "desc" },
     });
-    if (finding) scan = await getScan(finding.scanId);
+    if (finding) scan = await getScan(finding.scanId, orgId);
   }
   if (!scan?.graph) notFound();
 

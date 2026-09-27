@@ -1,36 +1,40 @@
-import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { CONNECTOR_CATALOG } from "@/lib/connectors";
 import { listFastnConnections } from "@/lib/fastn/embed";
-
-const ORG_ID = "default";
+import { withApi, jsonOk, jsonError } from "@/lib/api";
+import { log } from "@/lib/logger";
+import { rateLimit } from "@/lib/rate-limit";
 
 /**
- * Ask Fastn what is actually connected, then reconcile our rows.
- * This is the only thing allowed to set status "connected".
+ * Ask Fastn what is actually connected, then reconcile this tenant's rows.
+ * Only path allowed to set status "connected".
  */
-export async function GET() {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export const GET = withApi(async (_req, { orgId, userId }) => {
+  const rl = rateLimit(`fastn-sync:${userId}`, {
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (!rl.ok) {
+    return jsonError("Too many sync requests", 429, {
+      retryAfterSec: rl.retryAfterSec,
+    });
   }
 
   const catalogIds = CONNECTOR_CATALOG.map((c) => c.id);
   const live = await listFastnConnections(catalogIds);
 
   if (!live.ok) {
+    log.warn("fastn.connections.fail", { orgId, message: live.message });
     await db.connection.updateMany({
-      where: { orgId: ORG_ID, source: "fastn", status: "pending" },
+      where: { orgId, source: "fastn", status: "pending" },
       data: { lastError: live.message },
     });
-    const connections = await db.connection.findMany({
-      where: { orgId: ORG_ID },
+    const connections = await db.connection.findMany({ where: { orgId } });
+    return jsonOk({
+      verified: false,
+      error: live.message,
+      connections,
     });
-    return NextResponse.json(
-      { verified: false, error: live.message, connections },
-      { status: 200 },
-    );
   }
 
   const now = new Date();
@@ -38,9 +42,9 @@ export async function GET() {
 
   for (const { connectorId, externalId } of live.connections) {
     await db.connection.upsert({
-      where: { orgId_connectorId: { orgId: ORG_ID, connectorId } },
+      where: { orgId_connectorId: { orgId, connectorId } },
       create: {
-        orgId: ORG_ID,
+        orgId,
         connectorId,
         status: "connected",
         source: "fastn",
@@ -57,9 +61,8 @@ export async function GET() {
     });
   }
 
-  // Anything we previously trusted that Fastn no longer reports is not connected.
   const stale = await db.connection.findMany({
-    where: { orgId: ORG_ID, source: "fastn", status: "connected" },
+    where: { orgId, source: "fastn", status: "connected" },
   });
   for (const row of stale) {
     if (activeIds.has(row.connectorId)) continue;
@@ -73,6 +76,6 @@ export async function GET() {
     });
   }
 
-  const connections = await db.connection.findMany({ where: { orgId: ORG_ID } });
-  return NextResponse.json({ verified: true, connections });
-}
+  const connections = await db.connection.findMany({ where: { orgId } });
+  return jsonOk({ verified: true, connections });
+});

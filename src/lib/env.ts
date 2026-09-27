@@ -2,7 +2,25 @@
  * Server env validation — names only in errors, never values.
  */
 
+import { z } from "zod";
+
 export type PrivyDataMode = "fixture" | "live";
+
+const ProductionEnv = z.object({
+  DATABASE_URL: z.string().min(1),
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),
+  CLERK_SECRET_KEY: z.string().min(1),
+});
+
+/** Call from instrumentation or boot scripts — fails fast in production. */
+export function assertProductionEnv(): void {
+  if (process.env.NODE_ENV !== "production") return;
+  const parsed = ProductionEnv.safeParse(process.env);
+  if (!parsed.success) {
+    const missing = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
+    throw new Error(`Missing production env: ${missing}`);
+  }
+}
 
 export function missingEnv(keys: readonly string[]): string[] {
   return keys.filter((k) => !process.env[k]?.trim());

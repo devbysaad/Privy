@@ -2,7 +2,7 @@ import { runScan } from "../src/lib/scan/orchestrator";
 import { db } from "../src/lib/db";
 
 async function main() {
-  const r = await runScan({ mode: "demo" });
+  const r = await runScan({ mode: "demo", orgId: "default" });
   console.log(JSON.stringify(r, null, 2));
   const n = await db.finding.count({ where: { scanId: r.scanId } });
   console.log(`persisted findings: ${n}`);

@@ -1,31 +1,30 @@
-import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { preferredScanMode } from "@/lib/env";
 import { runScan, getScan } from "@/lib/scan/orchestrator";
 import type { Graph, PlatformCoverage } from "@/types";
+import { withApi, jsonOk, jsonError } from "@/lib/api";
+import { log } from "@/lib/logger";
 
-/**
- * Run discovery for the signed-in operator.
- * Always uses orgId "default" so Overview / Findings / Assistant share one workspace.
- */
-export async function POST() {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+/** Run discovery scoped to the signed-in operator's tenant. */
+export const POST = withApi(async (_req, { orgId, userId }) => {
   const mode = preferredScanMode();
-  const orgId = "default";
 
   try {
     const result = await runScan({ mode, orgId });
-    const scan = await getScan(result.scanId);
+    const scan = await getScan(result.scanId, orgId);
     const graph = (scan?.graph ?? null) as Graph | null;
     const coverage = (scan?.platformCoverage ?? null) as
       | PlatformCoverage[]
       | null;
 
-    return NextResponse.json({
+    log.info("onboarding.discover", {
+      userId,
+      orgId,
+      mode,
+      scanId: result.scanId,
+      findings: result.findingCount,
+    });
+
+    return jsonOk({
       mode,
       usedSampleData: mode === "demo",
       scanId: result.scanId,
@@ -46,9 +45,12 @@ export async function POST() {
       })),
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Discovery failed" },
-      { status: 500 },
+    log.error("onboarding.discover.fail", {
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return jsonError(
+      err instanceof Error ? err.message : "Discovery failed",
+      500,
     );
   }
-}
+});

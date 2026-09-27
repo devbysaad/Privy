@@ -1,43 +1,36 @@
-import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { z } from "zod";
+import { withApi, jsonOk, jsonError, parseJson } from "@/lib/api";
 import {
   isRemediationIntent,
   remediateFinding,
 } from "@/lib/remediation";
+import { rateLimit } from "@/lib/rate-limit";
 
-export async function POST(req: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+const Body = z.object({
+  findingId: z.string().min(1),
+  intent: z.string().min(1),
+});
+
+export const POST = withApi(async (req, { orgId, userId }) => {
+  const rl = rateLimit(`remediate:${userId}`, { limit: 30, windowMs: 60_000 });
+  if (!rl.ok) {
+    return jsonError("Too many requests", 429, {
+      retryAfterSec: rl.retryAfterSec,
+    });
   }
 
-  const body = (await req.json().catch(() => null)) as {
-    findingId?: string;
-    intent?: string;
-  } | null;
-
-  if (!body?.findingId || !body?.intent) {
-    return NextResponse.json(
-      { error: "findingId and intent required" },
-      { status: 400 },
-    );
-  }
-
+  const body = await parseJson(req, Body);
   if (!isRemediationIntent(body.intent)) {
-    return NextResponse.json(
-      { error: "Unknown intent — fail closed" },
-      { status: 400 },
-    );
+    return jsonError("Unknown intent — fail closed", 400);
   }
 
   const result = await remediateFinding({
     findingId: body.findingId,
     intent: body.intent,
     operatorId: userId,
+    orgId,
   });
 
-  if (!result.ok) {
-    return NextResponse.json(result, { status: 400 });
-  }
-  return NextResponse.json(result);
-}
+  if (!result.ok) return jsonError(result.message, 400);
+  return jsonOk(result);
+});

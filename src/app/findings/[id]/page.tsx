@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { ApproveRemediation } from "@/components/approve-remediation";
 import { SeverityBadge } from "@/components/severity-badge";
@@ -12,6 +12,7 @@ import {
   statusLabel,
 } from "@/lib/labels";
 import { getFinding } from "@/lib/scan/orchestrator";
+import { requireTenant } from "@/lib/tenant";
 import type { FindingEvidence } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,13 @@ export default async function FindingPage({
   const { id } = await params;
   const sp = await searchParams;
   const demo = sp.demo === "1";
-  const finding = await getFinding(id);
+  let orgId: string;
+  try {
+    ({ orgId } = await requireTenant());
+  } catch {
+    redirect("/sign-in");
+  }
+  const finding = await getFinding(id, orgId);
   if (!finding) notFound();
 
   const evidence = (finding.evidence ?? {}) as FindingEvidence;

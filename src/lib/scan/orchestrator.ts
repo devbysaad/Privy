@@ -19,9 +19,9 @@ function asJson(value: unknown): Prisma.InputJsonValue {
 
 export async function runScan(opts: {
   mode: ScanMode;
-  orgId?: string;
+  orgId: string;
 }): Promise<{ scanId: string; status: ScanStatus; findingCount: number }> {
-  const orgId = opts.orgId ?? "default";
+  const { orgId } = opts;
   const platforms =
     opts.mode === "demo"
       ? ["github", "drive", "slack"]
@@ -99,7 +99,7 @@ export async function runScan(opts: {
   }
 }
 
-export async function getLatestScan(orgId = "default", demoPreferred = false) {
+export async function getLatestScan(orgId: string, demoPreferred = false) {
   return db.scan.findFirst({
     where: {
       orgId,
@@ -113,18 +113,18 @@ export async function getLatestScan(orgId = "default", demoPreferred = false) {
   });
 }
 
-export async function getScan(scanId: string, orgId?: string) {
+export async function getScan(scanId: string, orgId: string) {
   return db.scan.findFirst({
-    where: { id: scanId, ...(orgId ? { orgId } : {}) },
+    where: { id: scanId, orgId },
     include: {
       findings: { orderBy: [{ severity: "asc" }, { title: "asc" }] },
     },
   });
 }
 
-export async function getFinding(findingId: string, orgId?: string) {
+export async function getFinding(findingId: string, orgId: string) {
   return db.finding.findFirst({
-    where: { id: findingId, ...(orgId ? { orgId } : {}) },
+    where: { id: findingId, orgId },
     include: { scan: true },
   });
 }

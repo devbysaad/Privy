@@ -1,17 +1,19 @@
-import { NextResponse } from "next/server";
 import { getLatestScan, getScan } from "@/lib/scan/orchestrator";
+import { withApi, jsonOk } from "@/lib/api";
 
-export async function GET(req: Request) {
+export const GET = withApi(async (req, { orgId }) => {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   const demo = searchParams.get("demo") === "1";
 
-  const scan = id ? await getScan(id) : await getLatestScan("default", demo);
+  const scan = id
+    ? await getScan(id, orgId)
+    : await getLatestScan(orgId, demo);
   if (!scan) {
-    return NextResponse.json({ scan: null, findings: [] });
+    return jsonOk({ scan: null, findings: [] });
   }
 
-  return NextResponse.json({
+  return jsonOk({
     scan: {
       id: scan.id,
       status: scan.status,
@@ -26,4 +28,4 @@ export async function GET(req: Request) {
     },
     findings: scan.findings,
   });
-}
+});

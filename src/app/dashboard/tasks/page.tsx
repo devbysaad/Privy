@@ -4,6 +4,8 @@ import { CreateWorkRequest } from "@/components/create-work-request";
 import { db } from "@/lib/db";
 import { formatWhen } from "@/lib/labels";
 import { companyRoster } from "@/lib/roster";
+import { requireTenant } from "@/lib/tenant";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +17,16 @@ export default async function TasksPage({
   const sp = await searchParams;
   const demo = sp.demo === "1";
   const q = demo ? "?demo=1" : "";
+
+  let orgId: string;
+  try {
+    ({ orgId } = await requireTenant());
+  } catch {
+    redirect("/sign-in");
+  }
+
   const tasks = await db.task.findMany({
-    where: { orgId: "default" },
+    where: { orgId },
     orderBy: { createdAt: "desc" },
     take: 50,
   });

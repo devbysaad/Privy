@@ -13,9 +13,12 @@ Hackathon MVP: scan GitHub + Drive + Slack (via Fastn or a seeded demo fixture),
 | Layer | Tech |
 |--------|------|
 | App | Next.js App Router · TypeScript · Tailwind · shadcn/ui |
-| DB | SQLite locally (`prisma/dev.db`) · Prisma (`Scan` + `Finding`) |
-| Integrations | Fastn (`executeTool` only) |
-| AI | Anthropic (optional; template fallback) |
+| Auth / tenancy | Clerk · `Workspace.id` as `orgId` |
+| DB | SQLite locally · Postgres for production · Prisma |
+| Integrations | Fastn OAuth + MCP |
+| AI | Gemini / Anthropic (optional; template fallback) |
+
+Architecture: [ARCHITECTURE.md](ARCHITECTURE.md). Health: `GET /api/health`.
 
 ## Quick start (demo, offline)
 
